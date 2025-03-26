@@ -36,6 +36,7 @@ class CameraHandler:
         self.frame = cv2.resize(full_frame, self.FRAME_SIZE, interpolation=cv2.INTER_LINEAR)
         return self.frame
 
+
 class VideoRecorder:
     FPS = 14.0                  # Frames per second for the video
     FRAME_INTERVAL = 1 / FPS    # Interval between frames (in seconds)
@@ -71,20 +72,23 @@ class VideoRecorder:
         """Start recording video."""
         self.recording_active = True
         self.out = self.create_video_file()
-        self.start_time = time.time()
         self.frame_count = 0
         self.overruns = 0
         self.overrun_total = 0
+        self.elapsed_time = 0
+        self.time_to_wait = 0
         self.logger.info("Recording started.")
+        self.start_time = time.time()
 
     def stop_recording(self):
         """Stop recording video."""
+        duration = time.time() - self.start_time
         if self.out:
             self.out.release()
         self.recording_active = False
-        duration = time.time() - self.start_time
-        average = 0 if self.overruns == 0 else self.overrun_total/self.overruns
+        average = 0 if self.overruns == 0 else self.overrun_total / self.overruns
         self.logger.info(f"Recording completed in {duration:.2f} seconds, {self.frame_count} frames, {self.overruns} overruns, total {self.overrun_total}, average {average}. Effective FPS: {self.frame_count / duration:.2f}.")
+        self.logger.info(f"Average elapsed time: {self.elapsed_time} # {self.elapsed_time / self.frame_count:.3f} seconds. Average time to wait: {self.time_to_wait / self.frame_count:.3f} seconds.")
 
     def write_frame(self, frame):
         """Write a frame to the video file."""
@@ -92,8 +96,10 @@ class VideoRecorder:
         # Regulate FPS (except first frame)
         if self.frame_start_time is not None:
             elapsed_time = time.time() - self.frame_start_time
-            time_to_wait = max(0, self.FRAME_INTERVAL - elapsed_time)
-            if time_to_wait > 0:
+            self.elapsed_time += elapsed_time
+            time_to_wait = self.FRAME_INTERVAL - elapsed_time
+            if time_to_wait >= 0:
+                self.time_to_wait += time_to_wait
                 time.sleep(time_to_wait)
             else:
                 self.overruns += 1
@@ -106,17 +112,15 @@ class VideoRecorder:
 class MotionHandler:
     MSE_MOTION_THRESHOLD = 15.0 # Minimum MSE value to trigger motion
     THRESHOLD_TIME = 10         # Time to keep recording after the last motion detection (in seconds)
-    MAX_SEGMENT_DURATION = 600  # Maximum duration of a video segment (in seconds)
 
-    def __init__(self, video_directory, camera_handler):
+    def __init__(self, camera_handler, video_recorder):
         """Initialize the motion handler with the video directory and camera handler."""
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.video_directory = video_directory
         self.camera_handler = camera_handler
-        self.video_recorder = VideoRecorder(video_directory, camera_handler.FRAME_SIZE)
 
         self.fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         self.storage_enabled = False
+        self.video_recorder = video_recorder
         self.terminate = False
         self.motion_detected = False
         self.start_video_thread = None
@@ -203,10 +207,18 @@ class MotionHandler:
         COLOR = (255, 255, 128) # light cyan
         cv2.putText(self.camera_handler.frame, "Motion detected", STARTPOINT, FONT, SCALE, COLOR, THICKNESS, cv2.LINE_AA)
 
-    total_wait = 0
-    waits = 0
 
-    def show_live_feed(self):
+class LiveFeedHandler:
+    def __init__(self, camera_handler, fps):
+        """Initialize the live feed handler with the camera handler and FPS."""
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.camera_handler = camera_handler
+        self.frame_interval = 1 / fps
+        self.terminate = False
+        self.total_wait = 0
+        self.waits = 0
+
+    def generate_feed(self):
         """Generate the live feed using frames."""
         while not self.terminate:
             try:
@@ -214,17 +226,19 @@ class MotionHandler:
                 _, buffer = cv2.imencode(".jpg", self.camera_handler.frame)
                 image_content = buffer.tobytes()
                 yield (b"--frame\r\n"
-                        b"Content-Type: image/jpeg\r\n\r\n" + image_content + b"\r\n")
+                       b"Content-Type: image/jpeg\r\n\r\n" + image_content + b"\r\n")
+
+                # Regulate FPS
                 elapsed_time = time.time() - start_time
-                time_to_wait = max(0, self.video_recorder.FRAME_INTERVAL - elapsed_time)
-                if (time_to_wait > 0):
+                time_to_wait = max(0, self.frame_interval - elapsed_time)
+                if time_to_wait > 0:
                     time.sleep(time_to_wait)
-                    MotionHandler.total_wait += time_to_wait
-                    MotionHandler.waits += 1
-                    if MotionHandler.waits == 100:
-                        self.logger.debug(f"Average wait time: {MotionHandler.total_wait/MotionHandler.waits:.3f} seconds")
-                        MotionHandler.waits = 0
-                        MotionHandler.total_wait = 0
+                    self.total_wait += time_to_wait
+                    self.waits += 1
+                    if self.waits == 100:
+                        self.logger.debug(f"Average wait time: {self.total_wait / self.waits:.3f} seconds")
+                        self.waits = 0
+                        self.total_wait = 0
                 else:
                     self.logger.error(f"Frame generation took {elapsed_time:.3f} seconds.")
             except Exception as e:
@@ -232,12 +246,15 @@ class MotionHandler:
                 break
         self.logger.info("Terminated live feed")
 
+
 class MotionCameraApp:
     def __init__(self):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.app = Flask(__name__)
         self.camera_handler = CameraHandler()
-        self.motion_handler = MotionHandler(video_directory="/media/cam", camera_handler=self.camera_handler)
+        self.video_recorder = VideoRecorder(video_directory="/media/cam", frame_size=self.camera_handler.FRAME_SIZE)
+        self.motion_handler = MotionHandler(camera_handler=self.camera_handler, video_recorder=self.video_recorder)
+        self.live_feed_handler = LiveFeedHandler(camera_handler=self.camera_handler, fps=self.video_recorder.FPS)
         self.detect_thread = None
 
         self.app.add_url_rule("/", "index", self.index)
@@ -273,10 +290,12 @@ class MotionCameraApp:
         if self.detect_thread != None:
             self.detect_thread.join()
             self.detect_thread = None
+        self.live_feed_handler.terminate = True
+
         return "System stopped"
 
     def live_feed(self):
-        return Response(self.motion_handler.show_live_feed(), mimetype="multipart/x-mixed-replace; boundary=frame")
+        return Response(self.live_feed_handler.generate_feed(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
     def disable_video_storage(self):
         self.motion_handler.storage_enabled = False
@@ -309,7 +328,7 @@ def set_logging():
             f"log level given: {options.log}"
             f" -- must be one of: {' | '.join(levels.keys())}")
     # omitted %(name)s for brevity
-    logging.basicConfig(format='%(asctime)s %(levelname)-8s: %(message)s', level=level)
+    logging.basicConfig(format='%(asctime)s %(name)s %(levelname)-8s: %(message)s', level=level)
     # make the dependencies less chatty when debugging
     if level == logging.DEBUG:
         logging.getLogger('picamera2').setLevel(logging.INFO)
