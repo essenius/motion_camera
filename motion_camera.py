@@ -36,24 +36,91 @@ class CameraHandler:
         self.frame = cv2.resize(full_frame, self.FRAME_SIZE, interpolation=cv2.INTER_LINEAR)
         return self.frame
 
+class VideoRecorder:
+    FPS = 14.0                  # Frames per second for the video
+    FRAME_INTERVAL = 1 / FPS    # Interval between frames (in seconds)
+    MAX_SEGMENT_DURATION = 600  # Maximum duration of a video segment (in seconds)
+
+    def __init__(self, video_directory, frame_size):
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.video_directory = video_directory
+        self.frame_size = frame_size
+        self.fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        self.recording_active = False
+        self.out = None
+        self.start_time = None
+        self.frame_count = 0
+        self.overruns = 0
+        self.overrun_total = 0
+        self.frame_start_time = None
+
+    def create_video_file(self):
+        now = datetime.datetime.now()
+        filename = f"cam_{now.date()}_{now.hour:02}-{now.minute:02}-{now.second:02}.mp4"
+        filepath = os.path.join(self.video_directory, filename)
+        self.logger.info(f"Recording to {filepath}")
+        return cv2.VideoWriter(filepath, self.fourcc, self.FPS, self.frame_size)
+
+    def is_segment_duration_exceeded(self):
+        """Check if the maximum segment duration has been exceeded."""
+        if not self.recording_active or self.start_time is None:
+            return False
+        return time.time() - self.start_time > self.MAX_SEGMENT_DURATION
+
+    def start_recording(self):
+        """Start recording video."""
+        self.recording_active = True
+        self.out = self.create_video_file()
+        self.start_time = time.time()
+        self.frame_count = 0
+        self.overruns = 0
+        self.overrun_total = 0
+        self.logger.info("Recording started.")
+
+    def stop_recording(self):
+        """Stop recording video."""
+        if self.out:
+            self.out.release()
+        self.recording_active = False
+        duration = time.time() - self.start_time
+        average = 0 if self.overruns == 0 else self.overrun_total/self.overruns
+        self.logger.info(f"Recording completed in {duration:.2f} seconds, {self.frame_count} frames, {self.overruns} overruns, total {self.overrun_total}, average {average}. Effective FPS: {self.frame_count / duration:.2f}.")
+
+    def write_frame(self, frame):
+        """Write a frame to the video file."""
+
+        # Regulate FPS (except first frame)
+        if self.frame_start_time is not None:
+            elapsed_time = time.time() - self.frame_start_time
+            time_to_wait = max(0, self.FRAME_INTERVAL - elapsed_time)
+            if time_to_wait > 0:
+                time.sleep(time_to_wait)
+            else:
+                self.overruns += 1
+                self.overrun_total -= time_to_wait 
+
+        self.frame_start_time = time.time()
+        self.out.write(frame)
+        self.frame_count += 1
+
 class MotionHandler:
     MSE_MOTION_THRESHOLD = 15.0 # Minimum MSE value to trigger motion
     THRESHOLD_TIME = 10         # Time to keep recording after the last motion detection (in seconds)
     MAX_SEGMENT_DURATION = 600  # Maximum duration of a video segment (in seconds)
-    FPS = 14.0                  # Frames per second for the video
-    FRAME_INTERVAL = 1 / FPS    # Interval between frames (in seconds)
 
     def __init__(self, video_directory, camera_handler):
         """Initialize the motion handler with the video directory and camera handler."""
         self.logger = logging.getLogger(self.__class__.__name__)
         self.video_directory = video_directory
         self.camera_handler = camera_handler
+        self.video_recorder = VideoRecorder(video_directory, camera_handler.FRAME_SIZE)
+
         self.fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         self.storage_enabled = False
-        self.recording_active = False
         self.terminate = False
         self.motion_detected = False
         self.start_video_thread = None
+        self.last_motion_time = None
 
     def __del__(self):
         self.logger.debug("Destroying MotionHandler")
@@ -62,66 +129,27 @@ class MotionHandler:
             self.start_video_thread = None
         self.logger.debug("Destroyed MotionHandler")
 
-    def recording_should_stop(self, last_motion_time, video_start_time):
-        if time.time() - last_motion_time > self.THRESHOLD_TIME:
+    def recording_should_stop(self):
+        if time.time() - self.last_motion_time > self.THRESHOLD_TIME:
             self.logger.info(f"No motion detected for {self.THRESHOLD_TIME} seconds. Stopping recording.")
             return True
 
-        if time.time() - video_start_time > self.MAX_SEGMENT_DURATION:
-            self.logger.info(f"Maximum segment duration of {self.MAX_SEGMENT_DURATION} reached. Stopping recording.")
+        if self.video_recorder.is_segment_duration_exceeded():
+            self.logger.info("Maximum segment duration reached. Stopping recording.")
             return True
         return False
 
     def store_video(self):
         """Start recording video when motion is detected."""
-        self.recording_active = True
-        out = self.create_video_file()
-
-        video_start_time = time.time()
-        last_motion_time = video_start_time
-        self.logger.info("Recording started. Waiting for motion to end...")
-        frame_count = 0
-        overruns = 0
-        overrun_total = 0
+        self.video_recorder.start_recording()
 
         while not self.terminate:
-            frame_start_time = time.time()
-            frame = self.camera_handler.frame
-            frame_count += 1
-            if frame is not None:
-                out.write(frame)
-            else:
-                self.logger.error("No frame captured.")
+            self.video_recorder.write_frame(self.camera_handler.frame)
 
-            if self.motion_detected:
-                last_motion_time = time.time()
-
-            if self.recording_should_stop(last_motion_time, video_start_time):
+            if self.recording_should_stop():
                 break
-
-            # ensure the video is recorded at the correct FPS
-            elapsed_time = time.time() - frame_start_time
-            time_to_wait = self.FRAME_INTERVAL - elapsed_time
-            if time_to_wait > 0:
-                time.sleep(time_to_wait)
-            else:
-                overruns += 1
-                overrun_total -= time_to_wait
-
-        duration = time.time() - video_start_time
-        average = 0 if overruns == 0 else overrun_total/overruns
-        self.logger.info(f"Recording completed in {duration:.2f} seconds, {frame_count} frames, {overruns} overruns, total {overrun_total}, average {average}. Effective FPS: {frame_count / duration:.2f}.")
-        out.release()
-        self.logger.debug("Released file")
-        self.recording_active = False
-
-    def create_video_file(self):
-        now = datetime.datetime.now()
-        filename = f"cam_{now.date()}_{now.hour:02}-{now.minute:02}-{now.second:02}.mp4"
-        filepath = os.path.join(self.video_directory, filename)
-        self.logger.info(f"Recording to {filepath}")
-        out = cv2.VideoWriter(filepath, self.fourcc, self.FPS, self.camera_handler.FRAME_SIZE)
-        return out
+            
+        self.video_recorder.stop_recording()
 
     @staticmethod
     def mean_squared_error(frame1, frame2):
@@ -156,11 +184,12 @@ class MotionHandler:
     def detect_motion(self, frame1_gray, frame2_gray):
         """Process motion detection by calculating MSE and acting on motion."""
         error = self.mean_squared_error(frame1_gray, frame2_gray)
-        self.logger.debug(f"MSE: {error} Motion Detection Enabled: {self.storage_enabled} Recording: {self.recording_active}")
+        self.logger.debug(f"MSE: {error} Motion Detection Enabled: {self.storage_enabled} Recording: {self.video_recorder.recording_active}")
         self.motion_detected = error >= self.MSE_MOTION_THRESHOLD
         if self.motion_detected:
             self.display_motion_alert()
-            if self.storage_enabled and not self.recording_active:
+            self.last_motion_time = time.time()
+            if self.storage_enabled and not self.video_recorder.recording_active:
                 self.start_video_thread = Thread(target=self.store_video)
                 self.start_video_thread.start()
 
@@ -187,7 +216,7 @@ class MotionHandler:
                 yield (b"--frame\r\n"
                         b"Content-Type: image/jpeg\r\n\r\n" + image_content + b"\r\n")
                 elapsed_time = time.time() - start_time
-                time_to_wait = max(0, self.FRAME_INTERVAL - elapsed_time)
+                time_to_wait = max(0, self.video_recorder.FRAME_INTERVAL - elapsed_time)
                 if (time_to_wait > 0):
                     time.sleep(time_to_wait)
                     MotionHandler.total_wait += time_to_wait
