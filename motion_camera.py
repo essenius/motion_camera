@@ -50,6 +50,7 @@ class Timer:
 class CameraHandler:
     FULL_SIZE = (1296, 972) # Supported size by the camera
     FRAME_SIZE = (800, 600) # Frame size to capture (lower, for performance reasons)
+    
     def __init__(self):
         """Initialize the camera handler with the camera object and capture configuration."""
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -213,7 +214,7 @@ class MotionHandler:
         self.logger.info("Camera capture terminated.")
 
     def detect_motion(self, frame1_gray, frame2_gray):
-        """Check if there is any motion by calculating mean sqared error."""
+        """Check if there is any motion by calculating mean squared error."""
         error = self.mean_squared_error(frame1_gray, frame2_gray)
         self.logger.debug(f"MSE: {error:.2f}; Recording: {self.video_recorder.recording_active}")
         self.motion_detected = error >= self.MSE_MOTION_THRESHOLD
