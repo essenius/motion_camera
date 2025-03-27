@@ -50,10 +50,15 @@ class VideoRecorder:
         self.recording_active = False
         self.out = None
         self.start_time = None
+        self.cleanup()
+
+    def cleanup(self):
         self.frame_count = 0
         self.overruns = 0
         self.overrun_total = 0
         self.frame_start_time = None
+        self.elapsed_time = 0
+        self.time_to_wait = 0
 
     def create_video_file(self):
         now = datetime.datetime.now()
@@ -72,11 +77,7 @@ class VideoRecorder:
         """Start recording video."""
         self.recording_active = True
         self.out = self.create_video_file()
-        self.frame_count = 0
-        self.overruns = 0
-        self.overrun_total = 0
-        self.elapsed_time = 0
-        self.time_to_wait = 0
+        self.cleanup()
         self.logger.info("Recording started.")
         self.start_time = time.time()
 
@@ -117,13 +118,10 @@ class MotionHandler:
         """Initialize the motion handler with the video directory and camera handler."""
         self.logger = logging.getLogger(self.__class__.__name__)
         self.camera_handler = camera_handler
-
-        self.fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         self.storage_enabled = False
         self.video_recorder = video_recorder
         self.terminate = False
         self.motion_detected = False
-        self.start_video_thread = None
         self.last_motion_time = None
 
     def __del__(self):
