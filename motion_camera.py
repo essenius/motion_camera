@@ -24,6 +24,7 @@ import logging
 import argparse
 
 class Timer:
+    """Class to handle sampling intervals (including overrun recovery)."""
     SAMPLING_RATE = 15.0                  # a.k.a. frames per second
     SAMPLING_INTERVAL = 1 / SAMPLING_RATE # interval between samples in seconds
 
@@ -48,9 +49,10 @@ class Timer:
 
 
 class CameraHandler:
+    """Class to handle the camera and capture frames."""
     FULL_SIZE = (1296, 972) # Supported size by the camera
     FRAME_SIZE = (800, 600) # Frame size to capture (lower, for performance reasons)
-    
+
     def __init__(self):
         """Initialize the camera handler with the camera object and capture configuration."""
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -74,6 +76,7 @@ class CameraHandler:
 
 
 class VideoRecorder:
+    """Class to handle video recording and storage."""
     MAX_SEGMENT_DURATION = 600  # Maximum duration of a video segment (in seconds)
 
     def __init__(self, video_directory, frame_size):
@@ -134,6 +137,7 @@ class VideoRecorder:
         self.frame_count += 1
 
 class MotionHandler:
+    """Class to handle motion detection and video storage."""
     MSE_MOTION_THRESHOLD = 15.0 # Minimum mean squared error value to trigger motion
     THRESHOLD_TIME = 10         # Time to keep recording after the last motion detection (in seconds)
 
@@ -155,31 +159,6 @@ class MotionHandler:
             self.start_video_thread.join()
             self.start_video_thread = None
         self.logger.debug("Destroyed MotionHandler")
-
-    def recording_should_stop(self):
-        """Check if the recording should stop based on the terminate flag, threshold time and segment duration."""
-        if time.time() - self.last_motion_time > self.THRESHOLD_TIME:
-            self.logger.info(f"No motion detected for {self.THRESHOLD_TIME} seconds. Stopping recording.")
-            return True
-
-        if self.terminate:
-            self.logger.info("Termination request. Stopping recording.")
-            return True
-
-        if self.video_recorder.is_segment_duration_exceeded():
-            self.logger.info("Maximum segment duration reached. Stopping recording.")
-            return True
-
-        return False
-
-    def store_video(self):
-        """Record a video when motion is detected."""
-        self.video_recorder.start_recording()
-
-        while not self.recording_should_stop():
-            self.video_recorder.write_frame(self.camera_handler.frame)
-            
-        self.video_recorder.stop_recording()
 
     @staticmethod
     def mean_squared_error(frame1, frame2):
@@ -220,14 +199,6 @@ class MotionHandler:
         self.motion_detected = error >= self.MSE_MOTION_THRESHOLD
         return self.motion_detected
 
-    def handle_motion(self):
-        """Handle motion detection by displaying an alert and starting video storage if it isn't already running."""
-        self.display_motion_alert()
-        self.last_motion_time = time.time()
-        if self.storage_enabled and not self.video_recorder.recording_active:
-            self.start_video_thread = Thread(target=self.store_video)
-            self.start_video_thread.start()
-
     def display_motion_alert(self):
         """Overlay a motion detection message on the frame."""
         SCALE = 0.5
@@ -239,8 +210,42 @@ class MotionHandler:
         cv2.putText(img = self.camera_handler.frame, text = "Motion detected", org = STARTPOINT, 
                     fontFace = FONT, fontScale = SCALE, color = COLOR, thickness = THICKNESS, lineType = cv2.LINE_AA)
 
+    def handle_motion(self):
+        """Handle motion detection by displaying an alert and starting video storage if it isn't already running."""
+        self.display_motion_alert()
+        self.last_motion_time = time.time()
+        if self.storage_enabled and not self.video_recorder.recording_active:
+            self.start_video_thread = Thread(target=self.store_video)
+            self.start_video_thread.start()
+
+    def recording_should_stop(self):
+        """Check if the recording should stop based on the terminate flag, threshold time and segment duration."""
+        if time.time() - self.last_motion_time > self.THRESHOLD_TIME:
+            self.logger.info(f"No motion detected for {self.THRESHOLD_TIME} seconds. Stopping recording.")
+            return True
+
+        if self.terminate:
+            self.logger.info("Termination request. Stopping recording.")
+            return True
+
+        if self.video_recorder.is_segment_duration_exceeded():
+            self.logger.info("Maximum segment duration reached. Stopping recording.")
+            return True
+
+        return False
+
+    def store_video(self):
+        """Record a video when motion is detected."""
+        self.video_recorder.start_recording()
+
+        while not self.recording_should_stop():
+            self.video_recorder.write_frame(self.camera_handler.frame)
+            
+        self.video_recorder.stop_recording()
+
 
 class LiveFeedHandler:
+    """ Class to handle the live feed from the camera. """
     def __init__(self, camera_handler):
         """Initialize the live feed handler with the camera handler and FPS."""
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -265,6 +270,7 @@ class LiveFeedHandler:
 
 
 class MotionCameraApp:
+    """Class to handle the motion camera application."""
     def __init__(self):
         """Initialize the MotionCameraApp."""
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -296,9 +302,34 @@ class MotionCameraApp:
         self.stop_capture()
         self.logger.info("Exited MotionCameraApp")
 
+    def disable_video_storage(self):
+        """Disable video storage."""
+        self.motion_handler.storage_enabled = False
+        return "Storage of motion videos turned off"
+
+    def enable_video_storage(self):
+        """Enable video storage."""
+        self.motion_handler.storage_enabled = True
+        return "Storage of motion videos turned on"
+
     def index(self):
         """Return the index page."""
         return "The system is running. For live feed, go to /livefeed"
+
+    def live_feed(self):
+        """Return the live camera feed."""
+        return Response(response = self.live_feed_handler.generate_feed(), mimetype="multipart/x-mixed-replace; boundary=frame")
+
+    def run(self):
+        """Run the MotionCameraApp."""
+        self.logger.info(self.start_capture())
+        self.logger.info(self.enable_video_storage())
+        self.app.run(host="0.0.0.0", debug=False)
+
+    def signal_handler(self, sig, frame):
+        """Handle the signal / terminate interrupts for gracefully exiting."""
+        self.logger.info("signal handler called. Exiting..")
+        raise SystemExit
 
     def start_capture(self):
         """Start capturing the camera feed."""
@@ -317,31 +348,6 @@ class MotionCameraApp:
 
         return "System stopped"
 
-    def live_feed(self):
-        """Return the live camera feed."""
-        return Response(response = self.live_feed_handler.generate_feed(), mimetype="multipart/x-mixed-replace; boundary=frame")
-
-    def disable_video_storage(self):
-        """Disable video storage."""
-        self.motion_handler.storage_enabled = False
-        return "Storage of motion videos turned off"
-
-    def enable_video_storage(self):
-        """Enable video storage."""
-        self.motion_handler.storage_enabled = True
-        return "Storage of motion videos turned on"
-
-    def signal_handler(self, sig, frame):
-        """Handle the signal / terminate interrupts for gracefully exiting."""
-        self.logger.info("signal handler called. Exiting..")
-        raise SystemExit
-
-    def run(self):
-        """Run the MotionCameraApp."""
-        self.logger.info(self.start_capture())
-        self.logger.info(self.enable_video_storage())
-        self.app.run(host="0.0.0.0", debug=False)
-
 
 def set_logging():
     """Setup logging and logging level for the application, based on command line parameters."""
@@ -349,20 +355,20 @@ def set_logging():
     parser.add_argument("-log", "--log", default="warning", help=("Provide logging level. Example --log debug, default='warning'"))
 
     options = parser.parse_args()
-    levels = { 'critical': logging.CRITICAL, 'error': logging.ERROR, 'warn': logging.WARNING,
-      'warning': logging.WARNING, 'info': logging.INFO, 'debug': logging.DEBUG  }
+    levels = { "critical": logging.CRITICAL, "error": logging.ERROR, "warn": logging.WARNING,
+      "warning": logging.WARNING, "info": logging.INFO, "debug": logging.DEBUG  }
     level = levels.get(options.log.lower())
     if level is None:
         raise ValueError(
             f"log level given: {options.log}"
             f" -- must be one of: {' | '.join(levels.keys())}")
-    logging.basicConfig(format='%(asctime)s %(name)-15s %(levelname)-8s: %(message)s', level=level)
+    logging.basicConfig(format="%(asctime)s %(name)-15s %(levelname)-8s: %(message)s", level=level)
     # make the dependencies less chatty when debugging
     if level == logging.DEBUG:
-        logging.getLogger('picamera2').setLevel(logging.INFO)
-        logging.getLogger('cv2').setLevel(logging.INFO)
-        logging.getLogger('flask').setLevel(logging.INFO)
-        logging.getLogger('werkzeug').setLevel(logging.INFO)
+        logging.getLogger("picamera2").setLevel(logging.INFO)
+        logging.getLogger("cv2").setLevel(logging.INFO)
+        logging.getLogger("flask").setLevel(logging.INFO)
+        logging.getLogger("werkzeug").setLevel(logging.INFO)
 
 if __name__ == "__main__":
     set_logging()
