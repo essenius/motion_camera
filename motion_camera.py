@@ -19,7 +19,6 @@ import datetime
 import os
 from flask import Flask, Response
 from threading import Thread
-import threading
 import signal
 import logging
 import argparse
@@ -66,13 +65,8 @@ class CameraHandler:
     def __del__(self):
         """Stop the camera and close the connection when the object is deleted."""
         self.logger.debug("Destroying CameraHandler")
-        try:
-            self.camera.stop()
-            self.logger.debug("Camera stopped.")
-            self.camera.close()
-            self.logger.debug("Camera connection closed.")
-        except Exception as e:
-            self.logger.error(f"Error during camera cleanup: {e}")
+        self.camera.stop()
+        self.camera.close()
         self.logger.debug("Destroyed CameraHandler")
 
     def capture_frame(self):
@@ -166,8 +160,6 @@ class MotionHandler:
         if self.start_video_thread is not None:
             self.start_video_thread.join()
             self.start_video_thread = None
-        active_threads = threading.enumerate()
-        self.logger.debug(f"Active threads after destroy MotionHandler: {active_threads}")
         self.logger.debug("Destroyed MotionHandler")
 
     @staticmethod
@@ -310,11 +302,6 @@ class MotionCameraApp:
         self.logger.debug("Exiting MotionCameraApp")
         self.disable_video_storage()
         self.stop_capture()
-
-        self.logger.debug("Garbage collection completed.")
-
-        active_threads = threading.enumerate()
-        self.logger.debug(f"Active threads after stop_capture: {active_threads}")
 
         self.logger.info("Exited MotionCameraApp")
 
