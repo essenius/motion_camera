@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
 # Copyright 2025 Rik Essenius
-# 
+#
 #   Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file
 #   except in compliance with the License. You may obtain a copy of the License at
-# 
+#
 #       http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 #   Unless required by applicable law or agreed to in writing, software distributed under the License
 #   is distributed on an "AS IS" BASIS WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #   See the License for the specific language governing permissions and limitations under the License.
@@ -19,9 +19,11 @@ import datetime
 import os
 from flask import Flask, Response
 from threading import Thread
+import threading
 import signal
 import logging
 import argparse
+
 
 class Timer:
     """Class to handle sampling intervals (including overrun recovery)."""
@@ -35,13 +37,13 @@ class Timer:
         # If we don't have a start time, don't wait and make the next sample time 'now'.
         if (start_time is None):
             return time.time()
-        
+
         elapsed_time = time.time() - start_time
         time_to_wait = Timer.SAMPLING_INTERVAL - elapsed_time
         if time_to_wait > 0:
             time.sleep(time_to_wait)
             return start_time + Timer.SAMPLING_INTERVAL
-        
+
         # If the overrun is too large, skip the next sample to catch up.
         multiplier = int(-time_to_wait / Timer.SAMPLING_INTERVAL) + 1
         logging.getLogger("Timer").debug(f"Overrun {label}: {-time_to_wait:.3f} seconds. Multiplier: {multiplier}")
@@ -64,8 +66,13 @@ class CameraHandler:
     def __del__(self):
         """Stop the camera and close the connection when the object is deleted."""
         self.logger.debug("Destroying CameraHandler")
-        self.camera.stop()
-        self.camera.close()
+        try:
+            self.camera.stop()
+            self.logger.debug("Camera stopped.")
+            self.camera.close()
+            self.logger.debug("Camera connection closed.")
+        except Exception as e:
+            self.logger.error(f"Error during camera cleanup: {e}")
         self.logger.debug("Destroyed CameraHandler")
 
     def capture_frame(self):
@@ -136,6 +143,7 @@ class VideoRecorder:
         self.out.write(frame)
         self.frame_count += 1
 
+
 class MotionHandler:
     """Class to handle motion detection and video storage."""
     MSE_MOTION_THRESHOLD = 15.0 # Minimum mean squared error value to trigger motion
@@ -158,6 +166,8 @@ class MotionHandler:
         if self.start_video_thread is not None:
             self.start_video_thread.join()
             self.start_video_thread = None
+        active_threads = threading.enumerate()
+        self.logger.debug(f"Active threads after destroy MotionHandler: {active_threads}")
         self.logger.debug("Destroyed MotionHandler")
 
     @staticmethod
@@ -207,7 +217,7 @@ class MotionHandler:
         STARTPOINT = (10, Y_OFFSET)
         FONT = cv2.FONT_HERSHEY_SIMPLEX
         COLOR = (255, 255, 128) # light cyan
-        cv2.putText(img = self.camera_handler.frame, text = "Motion detected", org = STARTPOINT, 
+        cv2.putText(img = self.camera_handler.frame, text = "Motion detected", org = STARTPOINT,
                     fontFace = FONT, fontScale = SCALE, color = COLOR, thickness = THICKNESS, lineType = cv2.LINE_AA)
 
     def handle_motion(self):
@@ -240,7 +250,7 @@ class MotionHandler:
 
         while not self.recording_should_stop():
             self.video_recorder.write_frame(self.camera_handler.frame)
-            
+
         self.video_recorder.stop_recording()
 
 
@@ -300,6 +310,12 @@ class MotionCameraApp:
         self.logger.debug("Exiting MotionCameraApp")
         self.disable_video_storage()
         self.stop_capture()
+
+        self.logger.debug("Garbage collection completed.")
+
+        active_threads = threading.enumerate()
+        self.logger.debug(f"Active threads after stop_capture: {active_threads}")
+
         self.logger.info("Exited MotionCameraApp")
 
     def disable_video_storage(self):
@@ -324,7 +340,13 @@ class MotionCameraApp:
         """Run the MotionCameraApp."""
         self.logger.info(self.start_capture())
         self.logger.info(self.enable_video_storage())
-        self.app.run(host="0.0.0.0", debug=False)
+        try:
+            self.app.run(host="0.0.0.0", debug=False)
+        except SystemExit:
+            self.logger.info("SystemExit received. Shutting down Flask server.")
+            raise  # Re-raise the exception to allow the program to exit
+        finally:
+            self.logger.info("Flask server has stopped.")
 
     def signal_handler(self, sig, frame):
         """Handle the signal / terminate interrupts for gracefully exiting."""
@@ -370,8 +392,8 @@ def set_logging():
         logging.getLogger("flask").setLevel(logging.INFO)
         logging.getLogger("werkzeug").setLevel(logging.INFO)
 
+
 if __name__ == "__main__":
     set_logging()
-
     with MotionCameraApp() as app:
         app.run()
