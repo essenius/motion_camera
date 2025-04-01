@@ -15,7 +15,14 @@ I'm saving my videos directly to a samba share so I don't need to use the Pi's S
 
 The application uses Flask as the web server and consists of several classes:
 
-### Timer
+### Configurator
+Grabbing the command line parameters and/or configuration file, setting up logging
+Start the app with `motion_camera.py --log=info` for the 'info' level. You can also use `debug`, `warning`, `error` or `critical`. Default is WARNING. 
+To prevent too much noise during debugging, logging level of dependencies (picamera2, cv2, flask and werkzeug) is put to INFO when choosing DEBUG.
+
+Run `motion_camera.py -h` to get help about command line parameters. All options except `config` are also available in config files.
+
+### Synchronizer
 Synchronizes the calling thread by waiting for the next sample time, and skipping samples if necessary (large overruns)
 
 ### Camera Handler
@@ -32,9 +39,6 @@ The recording thread leverages the video recorder to do the recording, and it de
 ### Live Feed Handler
 Provides the `/feed` handler: Displays the live feed at the right sampling rate.
 
-### Motion Camera App
-The controller managing Flask, the endpoints and the other objects. It also contains a signal handler to make sure that pressing Ctrl-C is handled gracefully.
-
-### Logging
-
-the `set_logging` function sets up logging, capturing the logging level from the command line. Start the app with `motion_camera.py --log=INFO` for the INFO level. You can also use DEBUG, WARNING, ERROR or CRITICAL. Default is WARNING. To prevent too much noise during debugging, logging level of dependencies (picamera2, cv2, flask and werkzeug) is put to INFO when choosing DEBUG.
+### Motion Camera
+Main application, and the MotionCamera class managing Flask, the endpoints and the other objects. 
+It also contains a signal handler to make sure that pressing Ctrl-C is handled gracefully.
