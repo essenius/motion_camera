@@ -16,18 +16,17 @@ from threading import Thread
 import logging
 from synchronizer import Synchronizer
 
-# We lazy load PiCamera2, OpenCV, NumPy and Flask. On the Pi Zero, these imports can take a long time (up to half a minute) 
-# and we want to avoid that, for example, if the user only asks for help. 
-
 class MotionHandler:
     """Class to handle motion detection and video storage."""
 
-    def __init__(self, camera_handler, video_recorder, options):
+    def __init__(self, camera_handler, video_recorder, options, cv2):
         """Initialize the motion handler with the video directory and camera handler."""
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger.debug(f"Initializing {self.__class__.__name__}")
         self.camera_handler = camera_handler
-        self.storage_enabled = False
         self.video_recorder = video_recorder
+        self.cv2 = cv2
+        self.storage_enabled = False
         self.start_video_thread = None
         self.terminate = False
         self.motion_detected = False
@@ -44,20 +43,17 @@ class MotionHandler:
             self.start_video_thread = None
         self.logger.debug(f"Destroyed {self.__class__.__name__}")
 
-    @staticmethod
-    def mean_squared_error(frame1, frame2):
+    def mean_squared_error(self, frame1, frame2):
         """Calculate the mean squared error between two grayscale frames."""
         import numpy # the only time we need it, so lazy load it
-        import cv2 # reuse the previously loaded library
         height, width = frame1.shape
         frame_size = float(height * width)
-        diff = cv2.subtract(frame1, frame2)
+        diff = self.cv2.subtract(frame1, frame2)
         err = numpy.sum(diff ** 2)
         return err / frame_size
 
     def capture_camera_feed(self):
         """Capture the camera feed to detect motion."""
-        import cv2 # also, reuse
         FRAME_SKIPS = 5
         frame_count = 0
         reference_frame = None
@@ -74,7 +70,7 @@ class MotionHandler:
             self.handle_motion()
             frame_count += 1
             if frame_count == FRAME_SKIPS:
-                gray_frame = cv2.cvtColor(src = frame, code = cv2.COLOR_RGB2GRAY)
+                gray_frame = self.cv2.cvtColor(src = frame, code = self.cv2.COLOR_RGB2GRAY)
                 self.detect_motion(reference_frame, gray_frame)
                 reference_frame = gray_frame
                 frame_count = 0
@@ -92,15 +88,14 @@ class MotionHandler:
 
     def display_motion_alert(self):
         """Overlay a motion detection message on the frame."""
-        import cv2 # reuse
         SCALE = 0.5
         THICKNESS = int(2 * SCALE)
         Y_OFFSET = THICKNESS * 25
         STARTPOINT = (10, Y_OFFSET)
-        FONT = cv2.FONT_HERSHEY_SIMPLEX
+        FONT = self.cv2.FONT_HERSHEY_SIMPLEX
         COLOR = (255, 255, 128) # light cyan
-        cv2.putText(img = self.camera_handler.frame, text = "Motion detected", org = STARTPOINT,
-                    fontFace = FONT, fontScale = SCALE, color = COLOR, thickness = THICKNESS, lineType = cv2.LINE_AA)
+        self.cv2.putText(img = self.camera_handler.frame, text = "Motion detected", org = STARTPOINT,
+            fontFace = FONT, fontScale = SCALE, color = COLOR, thickness = THICKNESS, lineType = self.cv2.LINE_AA)
 
     def handle_motion(self):
         """Handle motion detection by displaying an alert and starting video storage if it isn't already running."""

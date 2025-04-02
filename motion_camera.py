@@ -23,30 +23,56 @@ from video_recorder import VideoRecorder
 from motion_handler import MotionHandler
 from live_feed_handler import LiveFeedHandler
 
-# We lazy Flask and Werkzeug as that can take some time and we want to avoid that, for example, if the user only asks for help. 
+# We lazy load PiCamera2, OpenCV (cv2), Werkzeug and Flask. On the Pi Zero, these imports can take a long time (up to half a minute total) 
+# and we want to avoid that, for example, if the user only asks for help. 
 
 class MotionCamera:
     """Class to handle the motion camera application."""
 
     def log_server_ready(self):
-        """Log when the server is ready to handle requests."""
+        """Log when the server is ready to handle requests."""        
         ready_time = time.time()
         self.logger.info(f"Flask server is ready to receive requests at {ready_time:.3f} seconds since start.")
 
+    def _import_flask(self):
+        """Perform the Flask import."""
+        self.logger.debug("Importing Flask")
+        import flask
+        return flask
+
+    def _import_picamera2(self):
+        """Perform the Picamera2 import."""
+        self.logger.debug("Importing Picamera2")
+        from picamera2 import Picamera2
+        return Picamera2
+
+    def _import_cv2(self):
+        """Perform the OpenCV (cv2) import."""
+        self.logger.debug("Importing OpenCV (cv2)")
+        import cv2
+        return cv2
+    
     def __init__(self, options):
         """Initialize the MotionCameraApp."""
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger.debug(f"Initializing {self.__class__.__name__}")
         self.options = options
         Synchronizer.set_rate(options.rate)
         self.terminate_flag = False
         signal.signal(signal.SIGINT, self.terminate)
         signal.signal(signal.SIGTERM, self.terminate)
-        from flask import Flask
-        self.app = self.initialize_with_interrupt(Flask, __name__)
-        self.camera_handler = self.initialize_with_interrupt(CameraHandler, options)
-        self.video_recorder = self.initialize_with_interrupt(VideoRecorder, options)
-        self.motion_handler = self.initialize_with_interrupt(MotionHandler, camera_handler=self.camera_handler, video_recorder=self.video_recorder, options=options)
-        self.live_feed_handler = self.initialize_with_interrupt(LiveFeedHandler, camera_handler=self.camera_handler)
+
+        # Perform slow imports with interruption support
+        self.flask = self.initialize_with_interrupt(self._import_flask)
+        cv2 = self.initialize_with_interrupt(self._import_cv2)
+        self.app = self.initialize_with_interrupt(self.flask.Flask, __name__)
+        camera_class = self.initialize_with_interrupt(self._import_picamera2)
+
+        # we use dependency injection to pass cv2 to the classes that need it. This makes sure we know where it's loaded and it's easier to test
+        self.camera_handler = CameraHandler(camera_class=camera_class, options=options, cv2=cv2)
+        video_recorder = VideoRecorder(options=options, cv2=cv2)
+        self.motion_handler = MotionHandler(camera_handler=self.camera_handler, video_recorder=video_recorder, options=options, cv2=cv2)
+        self.live_feed_handler = LiveFeedHandler(camera_handler=self.camera_handler, cv2=cv2)
         self.detect_thread = None
 
         self.app.add_url_rule(rule = "/", endpoint = "index", view_func = self.index)
@@ -94,14 +120,14 @@ class MotionCamera:
 
     def live_feed(self):
         """Return the live camera feed."""
-        from flask import Response
         self.live_feed_handler.terminate = False
-        return Response(response = self.live_feed_handler.generate_feed(), mimetype="multipart/x-mixed-replace; boundary=frame")
+        return self.flask.Response(response = self.live_feed_handler.generate_feed(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
     def run(self):
         """Run the MotionCameraApp."""
+        self.logger.info(f"Running {self.__class__.__name__}")
         from werkzeug.serving import make_server  # Lazy load 
-
+        self.logger.debug("Done loading werkzeug")
         self.options.debug = options.verbose
 
         # do this before starting the server, so the camera can settle in
@@ -148,21 +174,23 @@ class MotionCamera:
 
 
 if __name__ == "__main__":
+    # We don't have a logger yet, but can get validation errors.
+    # If a SystemExit is raised here, the program will terminate with a message.
     options, unknown_options = Configurator.get_parser_options()
     Configurator.set_logging(options)
     logger = logging.getLogger(MotionCamera.__name__)
-    logger.info(f"Starting {MotionCamera.__name__}")
-    logger.debug(f"Options: {options}")
-    if unknown_options:
-        logger.warning(f"Unknown options: {unknown_options}")
-    logger.debug("Completed configuration")
     try:
+        options.directory = Configurator.validate_directory(options.directory)
+        logger.info(f"Starting {MotionCamera.__name__}")
+        logger.debug(f"Options: {options}")
+        if unknown_options:
+            logger.warning(f"Unknown options: {unknown_options}")
+        logger.debug("Completed configuration")
         with MotionCamera(options) as motion_camera:
             motion_camera.run()
     except SystemExit as e:
         if e is not None and str(e) != "":
-            logger.error(f"SystemExit: '{e}'")
-        raise
+            logger.error(f"Terminating. {e}")
                 
     finally:
         logger.info(f"{MotionCamera.__name__} terminated")

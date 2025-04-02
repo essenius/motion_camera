@@ -15,30 +15,29 @@ import time
 import logging
 from synchronizer import Synchronizer
 
-# We lazy load PiCamera2, OpenCV, NumPy and Flask. On the Pi Zero, these imports can take a long time (up to half a minute) 
-# and we want to avoid that, for example, if the user only asks for help. 
-
 class LiveFeedHandler:
     """ Class to handle the live feed from the camera. """
-    def __init__(self, camera_handler):
+
+    def __init__(self, camera_handler, cv2):
         """Initialize the live feed handler with the camera handler and FPS."""
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger.debug(f"Initializing {self.__class__.__name__}")
         self.camera_handler = camera_handler
+        self.cv2 = cv2
         self.terminate = False
 
     def generate_feed(self):
-        import cv2 # reuse
         """Generate the live feed using frames."""
         start_time = time.time()
         while not self.terminate:
             try:
-                _, buffer = cv2.imencode(".jpg", self.camera_handler.frame)
+                _, buffer = self.cv2.imencode(".jpg", self.camera_handler.frame)
                 # We need to send bytes, not Python strings
                 image_content = buffer.tobytes()
                 yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + image_content + b"\r\n")
                 start_time = Synchronizer.wait_for_next_sampling(start_time, label=self.__class__.__name__)
 
             except Exception as e:
-                self.logger.error(f"Live feed error: {e}")
+                self.logger.error(f"Live feed error: {e}.")
                 break
         self.logger.info("Terminated live feed")

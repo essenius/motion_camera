@@ -23,14 +23,15 @@ from synchronizer import Synchronizer
 class VideoRecorder:
     """Class to handle video recording and storage."""
     
-    def __init__(self, options):
+    def __init__(self, options, cv2):
         """Initialize the video recorder with the video directory and frame size."""
         self.logger = logging.getLogger(self.__class__.__name__)
-        import cv2 # lazy loading. This is the first time cv2 gets loaded
-        self.fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        self.logger.debug(f"Initializing {self.__class__.__name__}")
+        self.cv2 = cv2
         self.frame_size = options.frame_size
         self.video_directory = options.directory
         self.max_segment_duration = options.max_duration
+        self.fourcc = self.cv2.VideoWriter_fourcc(*"mp4v")
         self.recording_active = False
         self.out = None
         self.start_time = None
@@ -48,12 +49,17 @@ class VideoRecorder:
 
     def create_video_file(self):
         """Create a video file for recording."""
-        import cv2 # again, reuse the previously loaded library
         now = datetime.now()
         filename = f"cam_{now.date()}_{now.hour:02}-{now.minute:02}-{now.second:02}.mp4"
         filepath = os.path.join(self.video_directory, filename)
         self.logger.info(f"Recording to {filepath}")
-        return cv2.VideoWriter(filename = filepath, fourcc = self.fourcc, fps = Synchronizer.sampling_rate, frameSize = self.frame_size)
+        try:
+            video_writer = self.cv2.VideoWriter(filename = filepath, fourcc = self.fourcc, fps = Synchronizer.sampling_rate, frameSize = self.frame_size)
+            if not video_writer.isOpened():
+                raise SystemExit(f"Cannot open video file {filepath}.")
+            return video_writer
+        except Exception as e:
+            raise SystemExit(f"Error creating video file {filepath}: {e}.")
 
     def is_segment_duration_exceeded(self):
         """Check if the maximum segment duration has been exceeded."""
