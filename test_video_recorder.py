@@ -79,19 +79,15 @@ class TestVideoRecorder(unittest.TestCase):
         def incrementing_time():
             nonlocal current_time
             current_time = start_time_timestamp
-            print(f"Incrementing time from {current_time}.")
             while True:
                 yield current_time
-                print("Advancing time 0.01 seconds")
                 current_time += TIME_DELAY
 
         time_generator = incrementing_time()
-        print("time generator created")
 
         def mock_sleep(seconds):
             nonlocal current_time
             sleep_time = round(seconds, 5)
-            print(f"Mock sleep called with {sleep_time} seconds")
             current_time += round(sleep_time, 5)
 
         with patch("video_recorder.datetime") as mock_datetime, \
@@ -99,7 +95,6 @@ class TestVideoRecorder(unittest.TestCase):
              patch("synchronizer.time.time", side_effect=lambda: next(time_generator)), \
              patch("synchronizer.time.sleep", side_effect=mock_sleep) as mock_sleep:
             mock_datetime.now.return_value = start_time
-            print("STARTING RECORDING")
             handler.start_recording()
             mock_cv2.VideoWriter.assert_called_once_with(
                 filename="test_directory/cam_1970-01-01_01-00-00.mp4",
@@ -114,11 +109,8 @@ class TestVideoRecorder(unittest.TestCase):
             self.assertIsNone(handler.frame_start_time, "frame start time initialized to None")
 
             # write first frame
-            print("first frame")
 
             handler.write_frame(frame="test_frame")
-            print(f"Frame 1 resulting start time: {handler.frame_start_time}")
-            print("done first frame")
             frame1_start_time = handler.frame_start_time
             self.assertEqual(frame1_start_time, start_time_timestamp + TIME_DELAY, "frame 1 start time set correctly")
             mock_video_writer.write.assert_called_once_with("test_frame")
@@ -127,11 +119,8 @@ class TestVideoRecorder(unittest.TestCase):
 
             # now we are recording, so max segment duration can be calculated. We're still below the threshold
             self.assertFalse(handler.is_segment_duration_exceeded(), "segment duration not exceeded when just recording")
-            print(f"second frame, current time: {current_time}")
             handler.write_frame(frame="test_frame")
-            print(f"Frame 2 resulting start time: {handler.frame_start_time}")
             self.assertEqual(frame1_start_time + Synchronizer.sampling_interval, handler.frame_start_time, "frame 2 start time set correctly")
-            print("Current time:", current_time)
 
             self.assertEqual(mock_video_writer.write.call_count, 2, "write called twice")
             self.assertEqual(handler.frame_count, 2, "frame count incremented to 2")

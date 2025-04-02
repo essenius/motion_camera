@@ -56,7 +56,6 @@ class VideoRecorder:
         """Check if the maximum segment duration has been exceeded."""
         if not self.recording_active or self.start_time is None:
             return False
-        print("is_segment_duration_exceeded grabbing time")
         return time.time() - self.start_time > self.max_segment_duration
 
     def start_recording(self):
@@ -65,7 +64,6 @@ class VideoRecorder:
         self.recording_active = True
         self.cleanup()
         self.logger.info("Recording started.")
-        print("Start Recording grabbing time.")
         self.start_time = time.time()
 
     def stop_recording(self):
