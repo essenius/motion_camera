@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # Copyright 2025 Rik Essenius
 #
 #   Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file
@@ -41,38 +39,33 @@ class VideoRecorder:
     def cleanup(self):
         """Cleanup the video recorder state."""
         self.frame_count = 0
-        self.overruns = 0
-        self.overrun_total = 0
         self.frame_start_time = None
-        self.elapsed_time = 0
-        self.time_to_wait = 0
 
     def create_video_file(self):
         """Create a video file for recording."""
         now = datetime.now()
-        filename = f"cam_{now.date()}_{now.hour:02}-{now.minute:02}-{now.second:02}.mp4"
+        filename = now.strftime("cam_%Y-%m-%d_%H-%M-%S.mp4")
         filepath = os.path.join(self.video_directory, filename)
         self.logger.info(f"Recording to {filepath}")
-        try:
-            video_writer = self.cv2.VideoWriter(filename = filepath, fourcc = self.fourcc, fps = Synchronizer.sampling_rate, frameSize = self.frame_size)
-            if not video_writer.isOpened():
-                raise SystemExit(f"Cannot open video file {filepath}.")
-            return video_writer
-        except Exception as e:
-            raise SystemExit(f"Error creating video file {filepath}: {e}.")
+        video_writer = self.cv2.VideoWriter(filename = filepath, fourcc = self.fourcc, fps = Synchronizer.sampling_rate, frameSize = self.frame_size)
+        if not video_writer.isOpened():
+            raise SystemExit(f"Cannot open video file {filepath}.")
+        return video_writer
 
     def is_segment_duration_exceeded(self):
         """Check if the maximum segment duration has been exceeded."""
         if not self.recording_active or self.start_time is None:
             return False
+        print("is_segment_duration_exceeded grabbing time")
         return time.time() - self.start_time > self.max_segment_duration
 
     def start_recording(self):
         """Start recording video."""
-        self.recording_active = True
         self.out = self.create_video_file()
+        self.recording_active = True
         self.cleanup()
         self.logger.info("Recording started.")
+        print("Start Recording grabbing time.")
         self.start_time = time.time()
 
     def stop_recording(self):
@@ -80,6 +73,7 @@ class VideoRecorder:
         duration = time.time() - self.start_time
         if self.out:
             self.out.release()
+            self.out = None
         self.recording_active = False
         self.logger.info(f"Recording completed in {duration:.2f} seconds, {self.frame_count} frames. Effective FPS: {self.frame_count / duration:.2f}.")
 

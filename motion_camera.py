@@ -30,7 +30,7 @@ class MotionCamera:
     """Class to handle the motion camera application."""
 
     def log_server_ready(self):
-        """Log when the server is ready to handle requests."""        
+        """Log when the server is ready to handle requests."""
         ready_time = time.time()
         self.logger.info(f"Flask server is ready to receive requests at {ready_time:.3f} seconds since start.")
 

@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # Copyright 2025 Rik Essenius
 #
 #   Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file
@@ -34,11 +32,14 @@ class Synchronizer:
 
         # If we don't have a start time, don't wait and make the next sample time 'now'.
         if (start_time is None):
+            print(f"{label} no start time, skipping wait")
             return time.time()
 
+        print("Synchronizer grabbing time")
         elapsed_time = time.time() - start_time
         time_to_wait = Synchronizer.sampling_interval - elapsed_time
         if time_to_wait > 0:
+            print("Synchronizer waiting for next sample")
             time.sleep(time_to_wait)
             return start_time + Synchronizer.sampling_interval
 
