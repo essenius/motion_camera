@@ -85,8 +85,6 @@ class TestConfigurator(unittest.TestCase):
                 self.assertIn("Invalid frame size: '0x-1'", error_message)
 
 
-
-
     def test_configurator_get_parser_options_with_config_file(self):
         mock_config = """
         [DEFAULT]
