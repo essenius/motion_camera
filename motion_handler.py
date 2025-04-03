@@ -52,29 +52,30 @@ class MotionHandler:
 
     def capture_camera_feed(self):
         """Capture the camera feed to detect motion."""
-        FRAME_SKIPS = 5
-        frame_count = 0
-        reference_frame = None
+        self.frame_count = 0
+        self.reference_frame = None
         start_time = time.time()
 
         # skip the first few frames to allow the camera to adjust to lighting
         # then continuously capture frames and check for motion once every few frames to reduce processing load
 
-        # we handle the motion in the next loop to keep the loops fast enough. One frame difference shouldn't matter
-        self.handle_motion_flag = False
-
         while not self.terminate:
-            frame = self.camera_handler.capture_frame()
-            self.handle_motion()
-            frame_count += 1
-            if frame_count == FRAME_SKIPS:
-                gray_frame = self.cv2.cvtColor(src = frame, code = self.cv2.COLOR_RGB2GRAY)
-                self.detect_motion(reference_frame, gray_frame)
-                reference_frame = gray_frame
-                frame_count = 0
+            self.handle_frame()
             start_time = Synchronizer.wait_for_next_sampling(start_time, label=self.__class__.__name__)
 
         self.logger.info("Camera capture terminated.")
+
+    def handle_frame(self):
+        FRAME_SKIPS = 5
+        frame = self.camera_handler.capture_frame()
+        # we handle the motion in the next loop after detecting to keep the loops fast enough. One frame difference shouldn't matter
+        self.handle_motion()
+        self.frame_count += 1
+        if self.frame_count == FRAME_SKIPS:
+            gray_frame = self.cv2.cvtColor(src = frame, code = self.cv2.COLOR_RGB2GRAY)
+            self.detect_motion(self.reference_frame, gray_frame)
+            self.reference_frame = gray_frame
+            self.frame_count = 0
 
     def detect_motion(self, frame1_gray, frame2_gray):
         """Check if there is any motion by calculating mean squared error."""
@@ -104,6 +105,8 @@ class MotionHandler:
         self.last_motion_time = time.time()
         if self.storage_enabled and not self.video_recorder.recording_active:
             self.logger.debug("Starting video storage.")
+            print("Creating Thread for store_video")
+
             self.start_video_thread = Thread(target=self.store_video)
             self.start_video_thread.start()
         self.motion_detected = False

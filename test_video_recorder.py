@@ -13,9 +13,6 @@ import unittest
 from unittest.mock import patch, MagicMock
 from video_recorder import VideoRecorder
 from synchronizer import Synchronizer
-from io import StringIO
-import logging 
-from types import SimpleNamespace
 from datetime import datetime
 class TestVideoRecorder(unittest.TestCase):
 
