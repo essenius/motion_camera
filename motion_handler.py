@@ -105,8 +105,6 @@ class MotionHandler:
         self.last_motion_time = time.time()
         if self.storage_enabled and not self.video_recorder.recording_active:
             self.logger.debug("Starting video storage.")
-            print("Creating Thread for store_video")
-
             self.start_video_thread = Thread(target=self.store_video)
             self.start_video_thread.start()
         self.motion_detected = False

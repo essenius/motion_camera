@@ -12,10 +12,6 @@
 import unittest
 from unittest.mock import patch, MagicMock
 from motion_handler import MotionHandler
-from io import StringIO
-import logging 
-from types import SimpleNamespace
-from datetime import datetime
 import numpy
 import time
 
