@@ -37,8 +37,7 @@ class TestLiveFeedHandler(unittest.TestCase):
     def test_live_feed_handler_happy_path(self, mock_wait_for_next_sampling):
 
         # make the first call to wait_for_next_sampling set the terminate flag, so we exit the loop
-        def side_effect(*args, **kwargs):
-            print(f"side_effect called with args: {args}, kwargs: {kwargs}")
+        def side_effect(*args, **kwargs):            
             self.live_feed_handler.terminate = True
             return time.time() 
         
@@ -53,10 +52,12 @@ class TestLiveFeedHandler(unittest.TestCase):
         self.assertFalse(self.live_feed_handler.terminate, "terminate should still be False as the wait is after the yield")
         self.mock_cv2.imencode.assert_called_once_with(".jpg", self.mock_camera_handler.frame)
         mock_wait_for_next_sampling.assert_not_called()
+        message = next(feed_generator)
+        self.assertEqual(message, b"--frame\r\nContent-Type: text/plain\r\n\r\nLive feed terminated.\r\n\r\n")
+        self.assertTrue(self.live_feed_handler.terminate, "terminate should be True after the first wait (ending the loop)")
+        mock_wait_for_next_sampling.assert_called_once()
         with self.assertRaises(StopIteration):
             next(feed_generator)
-        self.assertTrue(self.live_feed_handler.terminate, "terminate should be True afte rthe first wait (ending the loop)")
-        mock_wait_for_next_sampling.assert_called_once()
 
     def test_live_feed_handler_unhappy_path(self):
         # Simulate an exception in the live feed
@@ -65,10 +66,14 @@ class TestLiveFeedHandler(unittest.TestCase):
         self.assertFalse(self.live_feed_handler.terminate, "terminate should be False by default")
 
         feed_generator = self.live_feed_handler.generate_feed()
+        # the first call to next should yield the error message
+        error = next(feed_generator)
+        self.assertEqual(error, (b"--frame\r\nContent-Type: text/plain\r\n\r\nLive feed terminated due to error: Test exception.\r\n\r\n"))
         with self.assertRaises(StopIteration):
             next(feed_generator)
 
         self.mock_logger.error.assert_called_once()
         self.mock_logger.error.assert_called_once_with("Live feed error: Test exception.")
-        self.mock_logger.info.assert_called_once_with("Terminated live feed")
+        self.mock_logger.info.assert_called_once_with("Live feed terminated")
         self.assertFalse(self.live_feed_handler.terminate, "terminate should not be True after an exception")
+

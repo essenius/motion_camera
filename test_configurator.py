@@ -17,6 +17,7 @@ import logging
 from types import SimpleNamespace
 from contextlib import ExitStack
 import argparse
+import os
 
 class TestConfigurator(unittest.TestCase):
     def test_configurator_get_parser_options_defaults(self):
@@ -160,30 +161,40 @@ class TestConfigurator(unittest.TestCase):
                 error_message = mock_stderr.getvalue()
                 self.assertIn("Expected type float between 1 and 65025 but got q", error_message)
 
+    @patch.dict("os.environ", {}, clear=True)
     def test_configurator_set_logging(self):
         with patch("logging.basicConfig") as mock_basic_config:
             options = SimpleNamespace(log="DEBUG", verbose=False)
             Configurator.set_logging(options)
             FORMAT = "%(asctime)s %(name)-15s %(levelname)-8s: %(message)s"
             mock_basic_config.assert_called_once_with(level=logging.DEBUG, format=FORMAT)
+            self.assertIsNone(os.environ.get(Configurator.LIBCAMERA_LOG_LEVELS))
             options.log = "INFO"
             Configurator.set_logging(options)
             mock_basic_config.assert_called_with(level=logging.INFO, format=FORMAT)
+            self.assertIsNone(os.environ.get(Configurator.LIBCAMERA_LOG_LEVELS))
             options.log = "WARNING"
             Configurator.set_logging(options)
             mock_basic_config.assert_called_with(level=logging.WARNING, format=FORMAT)
+            self.assertEqual(os.environ.get(Configurator.LIBCAMERA_LOG_LEVELS), "RPI:WARN,Camera:WARN,RPiSdn:WARN")
+            del os.environ[Configurator.LIBCAMERA_LOG_LEVELS]
             options.log = "ERROR"
             Configurator.set_logging(options)
             mock_basic_config.assert_called_with(level=logging.ERROR, format=FORMAT)
+            self.assertEqual(os.environ.get(Configurator.LIBCAMERA_LOG_LEVELS), "RPI:ERROR,Camera:ERROR,RPiSdn:ERROR")
+            del os.environ[Configurator.LIBCAMERA_LOG_LEVELS]
             options.log = "CRITICAL"
             Configurator.set_logging(options)
             mock_basic_config.assert_called_with(level=logging.CRITICAL, format=FORMAT)
+            self.assertEqual(os.environ.get(Configurator.LIBCAMERA_LOG_LEVELS), "RPI:FATAL,Camera:FATAL,RPiSdn:FATAL")
+            del os.environ[Configurator.LIBCAMERA_LOG_LEVELS]
 
             # now check if another option causes an error with a message
             options.log = "BOGUS"
             with self.assertRaises(SystemExit) as context:
                 Configurator.set_logging(options)
             self.assertGreaterEqual(str(context.exception).find("Unrecognized log level 'BOGUS' -- must be one of: critical | error | warning | info | debug"), 0)
+            self.assertIsNone(os.environ.get(Configurator.LIBCAMERA_LOG_LEVELS))
             
 
 

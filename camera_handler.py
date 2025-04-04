@@ -11,6 +11,7 @@
 
 import time
 import logging
+import os
 
 # We lazy load PiCamera2 and OpenCV. On the Pi Zero, these imports can take a long time (up to half a minute) 
 # and we want to avoid that, for example, if the user only asks for help. 
@@ -22,6 +23,7 @@ class CameraHandler:
         """Initialize the camera handler with the camera object and capture configuration."""
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.debug(f"Initializing {self.__class__.__name__}")
+
         self.camera = camera_class()
         self.logger.debug("Created camera variable")
         self.cv2 = cv2

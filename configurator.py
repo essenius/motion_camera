@@ -57,6 +57,29 @@ class ValidateNumber:
         
 class Configurator:
     """Class to handle the configuration of the application."""
+    LIBCAMERA_LOG_LEVELS = "LIBCAMERA_LOG_LEVELS"
+    @staticmethod
+    def convert_to_libcamera_level(level):
+        """Convert the logging level to a libcamera equivalent."""
+        levels = {
+            logging.CRITICAL: "FATAL",
+            logging.ERROR: "ERROR",
+            logging.WARNING: "WARN",
+            logging.INFO: "INFO",
+            logging.DEBUG: "DEBUG",
+        }
+        return levels.get(level, "INFO")
+
+    @staticmethod
+    def set_libcamera_logging(desired_level):
+        """Set the libcamera logging level."""
+        if os.environ.get(Configurator.LIBCAMERA_LOG_LEVELS, "NONE") != "NONE" or desired_level == logging.INFO:
+            # don't set the libcamera level if it is already set, and default is INFO so no need to set if that's what we want
+            return
+        new_level = Configurator.convert_to_libcamera_level(desired_level)        
+        env_value =  f"RPI:{new_level},Camera:{new_level},RPiSdn:{new_level}"
+        print(f"Setting libcamera logging levels to: {env_value}")
+        os.environ[Configurator.LIBCAMERA_LOG_LEVELS] = env_value
 
     @staticmethod
     def set_logging(options):
@@ -73,6 +96,8 @@ class Configurator:
             logging.getLogger("cv2").setLevel(logging.INFO)
             logging.getLogger("flask").setLevel(logging.INFO)
             logging.getLogger("werkzeug").setLevel(logging.INFO)
+            level = logging.INFO
+        Configurator.set_libcamera_logging(level)
 
     @staticmethod
     def validate_frame_size(value):
@@ -82,14 +107,11 @@ class Configurator:
                 raise ValueError
             return width, height
         except ValueError:
-            raise argparse.ArgumentTypeError(
-                f"Invalid frame size: '{value}'. Expected format: width x height (e.g., 800x600)."
-            )
+            raise argparse.ArgumentTypeError(f"Invalid frame size: '{value}'. Expected format: width x height (e.g., 800x600).")
 
     @staticmethod
     def get_parser_options():
         """Setup command line parser."""
-
         # As we can only parse the args once, we need two parsers: one to get the config file and one for the rest
         initial_parser = argparse.ArgumentParser(add_help = False)
         initial_parser.add_argument("-c", "--config", default="motion_camera.conf", help="Configuration file (motion_camera.conf)")
@@ -124,10 +146,8 @@ class Configurator:
         group.add_argument("--no-verbose",            default=verbose_default, action="store_false", dest = "verbose", help="Disable verbose output for dependencies when debugging")
         
         known_options, unknown_options = parser.parse_known_args()
-        
         return known_options, unknown_options
   
-
     @staticmethod
     def validate_directory(path):
         """Validate the path to ensure it exists, is a directoey, is writable, and has enough free space."""

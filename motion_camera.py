@@ -31,8 +31,7 @@ class MotionCamera:
 
     def log_server_ready(self):
         """Log when the server is ready to handle requests."""
-        ready_time = time.time()
-        self.logger.info(f"Flask server is ready to receive requests at {ready_time:.3f} seconds since start.")
+        self.logger.info("Flask server is ready to receive requests.")
 
     def _import_flask(self):
         """Perform the Flask import."""
@@ -58,14 +57,15 @@ class MotionCamera:
         self.logger.debug(f"Initializing {self.__class__.__name__}")
         self.options = options
         Synchronizer.set_rate(options.rate)
-        self.terminate_flag = False
-        signal.signal(signal.SIGINT, self.terminate)
-        signal.signal(signal.SIGTERM, self.terminate)
+        self.terminate = False
+        signal.signal(signal.SIGINT, self.terminate_app)
+        signal.signal(signal.SIGTERM, self.terminate_app)
 
         # Perform slow imports with interruption support
         self.flask = self.initialize_with_interrupt(self._import_flask)
         cv2 = self.initialize_with_interrupt(self._import_cv2)
         self.app = self.initialize_with_interrupt(self.flask.Flask, __name__)
+        self.app.debug = options.verbose
         camera_class = self.initialize_with_interrupt(self._import_picamera2)
 
         # we use dependency injection to pass cv2 to the classes that need it. This makes sure we know where it's loaded and it's easier to test
@@ -79,6 +79,7 @@ class MotionCamera:
         self.app.add_url_rule(rule = "/start", endpoint = "start_capture", view_func = self.start_capture)
         self.app.add_url_rule(rule = "/stop", endpoint = "stop_capture", view_func = self.stop_capture)
         self.app.add_url_rule(rule = "/feed", endpoint = "feed", view_func = self.live_feed)
+        self.app.add_url_rule(rule = "/endfeed", endpoint = "end_feed", view_func = self.end_feed)
         self.app.add_url_rule(rule = "/nosave", endpoint = "no_save", view_func = self.disable_video_storage)
         self.app.add_url_rule(rule = "/save", endpoint = "save", view_func = self.enable_video_storage)
 
@@ -88,7 +89,7 @@ class MotionCamera:
 
     def initialize_with_interrupt(self, cls, *args, **kwargs):
         """Initialize a class with interruption support."""
-        if self.terminate_flag:
+        if self.terminate:
             self.logger.warning("Initialization interrupted by SIGINT/SIGTERM signal")
             raise SystemExit
         return cls(*args, **kwargs)
@@ -107,40 +108,60 @@ class MotionCamera:
     def disable_video_storage(self):
         """Disable video storage."""
         self.motion_handler.storage_enabled = False
-        return "Storage of motion videos disabled"
+        return "Video storage disabled"
 
     def enable_video_storage(self):
         """Enable video storage."""
         self.motion_handler.storage_enabled = True
-        return "Storage of motion videos enabled"
+        return "Video storage enabled"
 
     def index(self):
         """Return the index page."""
-        return "The system is running. For live feed, go to /livefeed"
+        capture_status = "capturing" if not self.motion_handler.terminate else "idle"
+        live_feed_status = "running" if not self.live_feed_handler.terminate else "stopped"
+        storage_status = "enabled" if self.motion_handler.storage_enabled else "disabled"
+
+        return (
+            f"<p>The system is {capture_status}, live feed is {live_feed_status} and storage is {storage_status}. <br />"
+            "<br />"
+            "Your choices: </p>"
+            "<ul>"
+            "<li><a href='/feed'>Show live Feed</a></li>" 
+            "<li><a href='/endfeed'>Stop live feed</a></li>"
+            "<li><a href='/start'>Start capturing video</a></li>"
+            "<li><a href='/stop'>Stop capturing video</a></li>"
+            "<li><a href='/save'>Enable video storage</a></li>"
+            "<li><a href='/nosave'>Disable video storage</a></li>"
+            "</ul>"
+        )
 
     def live_feed(self):
         """Return the live camera feed."""
         self.live_feed_handler.terminate = False
         return self.flask.Response(response = self.live_feed_handler.generate_feed(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
+    def end_feed(self):
+        """Return the live camera feed."""
+        self.live_feed_handler.terminate = True
+        return "Live feed terminated"
+
     def run(self):
         """Run the MotionCameraApp."""
         self.logger.info(f"Running {self.__class__.__name__}")
         from werkzeug.serving import make_server  # Lazy load 
         self.logger.debug("Done loading werkzeug")
-        self.options.debug = options.verbose
 
         # do this before starting the server, so the camera can settle in
-        if not options.no_auto_start:
+        if not self.options.no_auto_start:
             message = self.start_capture()
             self.logger.info(message)
 
-        self.logger.info(f"Starting Flask server on port {options.port}{' (debug mode)' if options.verbose else ''}")
-        server = make_server("0.0.0.0", options.port, self.app)
+        self.logger.info(f"Starting Flask server on port {self.options.port}{' (debug mode)' if self.options.verbose else ''}")
+        server = make_server("0.0.0.0", self.options.port, self.app)
         self.logger.info("Flask server is ready to receive requests.")
 
         # do this after creating the server, so we don't record the startup time while the camera settles in
-        if not options.no_auto_start:
+        if not self.options.no_auto_start:
             message = self.enable_video_storage()
             self.logger.info(message)
 
@@ -149,10 +170,10 @@ class MotionCamera:
         finally:
             self.logger.info("Flask server has stopped.")
 
-    def terminate(self, sig=None, frame=None):
+    def terminate_app(self, sig=None, frame=None):
         """Handle the signal / terminate interrupts for gracefully exiting."""
         self.logger.info("signal handler called. Exiting..")
-        self.terminate_flag = True
+        self.terminate = True
         raise SystemExit
 
     def start_capture(self):
@@ -161,7 +182,7 @@ class MotionCamera:
         self.detect_thread = Thread(target=self.motion_handler.capture_camera_feed)
         self.detect_thread.daemon = True
         self.detect_thread.start()
-        return "Started capturing the camera feed"
+        return "Camera feed started"
 
     def stop_capture(self):
         """Stop capturing the camera feed."""
@@ -170,10 +191,11 @@ class MotionCamera:
             self.detect_thread.join()
             self.detect_thread = None
         self.live_feed_handler.terminate = True
-        return "Stopped capturing the camera feed"
+        return "Camera feed stopped"
 
 
-if __name__ == "__main__":
+def main_helper():
+    """Main helper function to run the application."""
     # We don't have a logger yet, but can get validation errors.
     # If a SystemExit is raised here, the program will terminate with a message.
     options, unknown_options = Configurator.get_parser_options()
@@ -184,13 +206,17 @@ if __name__ == "__main__":
         logger.info(f"Starting {MotionCamera.__name__}")
         logger.debug(f"Options: {options}")
         if unknown_options:
-            logger.warning(f"Unknown options: {unknown_options}")
+            logger.warning(f"Ignoring unknown options: {unknown_options}")
         logger.debug("Completed configuration")
         with MotionCamera(options) as motion_camera:
             motion_camera.run()
     except SystemExit as e:
         if e is not None and str(e) != "":
             logger.error(f"Terminating. {e}")
-                
+            raise
     finally:
         logger.info(f"{MotionCamera.__name__} terminated")
+
+
+if __name__ == "__main__":
+    main_helper()

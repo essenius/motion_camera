@@ -27,6 +27,8 @@ class LiveFeedHandler:
     def generate_feed(self):
         """Generate the live feed using frames."""
         start_time = time.time()
+        message = "Live feed terminated"
+        error = ""
         while not self.terminate:
             try:
                 _, buffer = self.cv2.imencode(".jpg", self.camera_handler.frame)
@@ -36,6 +38,8 @@ class LiveFeedHandler:
                 start_time = Synchronizer.wait_for_next_sampling(start_time, label=self.__class__.__name__)
 
             except Exception as e:
+                error = " due to error: " + str(e)
                 self.logger.error(f"Live feed error: {e}.")
                 break
-        self.logger.info("Terminated live feed")
+        self.logger.info(message)
+        yield f"--frame\r\nContent-Type: text/plain\r\n\r\n{message}{error}.\r\n\r\n".encode("utf-8")
