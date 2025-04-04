@@ -35,19 +35,19 @@ class MotionCamera:
 
     def _import_flask(self):
         """Perform the Flask import."""
-        self.logger.debug("Importing Flask")
+        self.logger.info("Importing Flask")
         import flask
         return flask
 
     def _import_picamera2(self):
         """Perform the Picamera2 import."""
-        self.logger.debug("Importing Picamera2")
+        self.logger.info("Importing Picamera2")
         from picamera2 import Picamera2
         return Picamera2
 
     def _import_cv2(self):
         """Perform the OpenCV (cv2) import."""
-        self.logger.debug("Importing OpenCV (cv2)")
+        self.logger.info("Importing OpenCV (cv2)")
         import cv2
         return cv2
     
