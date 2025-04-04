@@ -9,9 +9,7 @@
 #   is distributed on an "AS IS" BASIS WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #   See the License for the specific language governing permissions and limitations under the License.
 
-import time
 import logging
-import os
 
 # We lazy load PiCamera2 and OpenCV. On the Pi Zero, these imports can take a long time (up to half a minute) 
 # and we want to avoid that, for example, if the user only asks for help. 

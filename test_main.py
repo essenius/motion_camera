@@ -12,12 +12,12 @@
 import unittest
 from unittest.mock import patch, MagicMock
 
-
 class CustomMock(MagicMock):
     @property
     def __name__(self):
         return "MotionCamera"
     
+
 class TestMain(unittest.TestCase):
 
     @patch("motion_camera.MotionCamera")

@@ -10,12 +10,8 @@
 #   See the License for the specific language governing permissions and limitations under the License.
 
 import unittest
-from unittest.mock import patch, MagicMock
-import time as Time
+from unittest.mock import MagicMock
 from camera_handler import CameraHandler
-from io import StringIO
-import logging 
-from types import SimpleNamespace
 
 class TestCameraHandler(unittest.TestCase):
 
