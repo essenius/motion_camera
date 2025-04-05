@@ -117,7 +117,8 @@ class TestVideoRecorder(unittest.TestCase):
             self.assertEqual(self.mock_video_writer.write.call_count, 2, "write called twice")
             self.assertEqual(self.recorder.frame_count, 2, "frame count incremented to 2")
 
-            actual_sleep_time = self.get_argument(mock_sleep, "sleep_time")
+            args, _ = mock_sleep.call_args
+            actual_sleep_time = args[0]
 
             # Define the expected value and delta
             expected_sleep_time = Synchronizer.sampling_interval - 2 * TIME_DELAY 
@@ -130,15 +131,4 @@ class TestVideoRecorder(unittest.TestCase):
             self.recorder.stop_recording()
             self.assertFalse(self.recorder.recording_active, "recording not active after stop_recording")
             self.assertIsNone(self.recorder.out, "video writer closed after stop_recording")
-
-    def get_argument(self, mock, argument_name=None):
-        args, kwargs = mock.call_args
-        # If a positional argument is provided, use it
-        if len(args) > 0:
-            return args[0]
-
-        if argument_name in kwargs:
-            return kwargs[argument_name]
-
-        return None
             

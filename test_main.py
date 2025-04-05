@@ -11,52 +11,74 @@
 
 import unittest
 from unittest.mock import patch, MagicMock
-
-class CustomMock(MagicMock):
-    @property
-    def __name__(self):
-        return "MotionCamera"
-    
+from motion_camera import main_helper
 
 class TestMain(unittest.TestCase):
 
-    @patch("motion_camera.MotionCamera")
-    @patch("motion_camera.Configurator.set_logging") 
-    @patch("motion_camera.Configurator.validate_directory")
-    @patch("motion_camera.Configurator.get_parser_options") 
-    def test_motion_camera_main_helper(self, mock_get_parser_options, mock_validate_directory, mock_logging, mock_motion_camera):
-        mock_options = MagicMock()
-        mock_options.port = 5000
-        mock_options.directory = "/home/user/videos"
-        mock_options.log_level = "info"
-        mock_unknown = ['unknown', 'unknown']
-        mock_get_parser_options.return_value = (mock_options, mock_unknown)
+    def setUp(self):
+        # Create patchers for all the mocks
+        self.motion_camera_patcher = patch("motion_camera.MotionCamera")
+        self.set_logging_patcher = patch("motion_camera.Configurator.set_logging")
+        self.validate_directory_patcher = patch("motion_camera.Configurator.validate_directory")
+        self.get_parser_options_patcher = patch("motion_camera.Configurator.get_parser_options")
+        self.get_logger_patcher = patch("logging.getLogger")
+        self.sys_argv_patcher = patch("sys.argv", [])
 
-        print("Mock parser return value (configured):", mock_get_parser_options.return_value)
+        # Start the patchers
+        self.mock_motion_camera = self.motion_camera_patcher.start()
+        self.mock_set_logging = self.set_logging_patcher.start()
+        self.mock_validate_directory = self.validate_directory_patcher.start()
+        self.mock_get_parser_options = self.get_parser_options_patcher.start()
+        self.mock_get_logger = self.get_logger_patcher.start()
+        self.mock_sys_argv = self.sys_argv_patcher.start()
 
-        mock_motion_camera.__name__ = "MotionCamera"
-        mock_motion_camera_instance = MagicMock()
-        print("mock_motion_camera_instance:", mock_motion_camera_instance)
-        print("mock_motion_camera:", mock_motion_camera)
-        mock_motion_camera.return_value = mock_motion_camera_instance
-        mock_motion_camera_instance.__enter__.return_value = mock_motion_camera_instance
-        mock_motion_camera_instance.__exit__.return_value = None
-        mock_app = mock_motion_camera.return_value
+        # Configure the mocks
+        self.mock_options = MagicMock()
+        self.mock_options.port = 5000
+        self.mock_options.directory = "/home/user/videos"
+        self.mock_options.log_level = "info"
+        self.mock_unknown = ['unknown', 'unknown']
+        self.mock_get_parser_options.return_value = (self.mock_options, self.mock_unknown)
 
-        from motion_camera import main_helper
+        self.mock_motion_camera.__name__ = "MotionCamera"
+        self.mock_app = MagicMock()
+        self.mock_motion_camera.return_value = self.mock_app
+        self.mock_app.__enter__.return_value = self.mock_app
+        self.mock_app.__exit__.return_value = None
+
+        self.mock_logger = MagicMock()
+        self.mock_get_logger.return_value = self.mock_logger
+
+    def tearDown(self):
+        # Stop all patchers
+        self.motion_camera_patcher.stop()
+        self.set_logging_patcher.stop()
+        self.validate_directory_patcher.stop()
+        self.get_parser_options_patcher.stop()
+        self.get_logger_patcher.stop()
+        self.sys_argv_patcher.stop()
+
+
+    def test_motion_camera_main_helper_happy_path(self):
 
         with patch("sys.argv", ["motion_camera.py", "--port", "5000", "--directory", "/home/user/videos", "-l", "info"]):
             main_helper()
 
-        mock_get_parser_options.assert_called_once()
+        self.mock_get_parser_options.assert_called_once()
+        self.mock_motion_camera.assert_called_once_with(self.mock_options)
+        self.mock_app.terminate.assert_not_called()  # No exception raised in this test
+        self.mock_logger.error.assert_not_called()
+        self.mock_logger.info.assert_called_with("MotionCamera terminated.")
+        self.mock_app.run.assert_called_once()
 
-        mock_motion_camera.assert_called_once_with(mock_options)
-
-        mock_app.run.assert_called_once()
-
-        mock_app.terminate.assert_not_called()  # No exception raised in this test
-
-
-
-
+    def test_motion_camera_main_helper_systemexit_message(self):
+        def side_effect(*args, **kwargs):
+            raise SystemExit("Validation failed.")
         
+        self.mock_validate_directory.side_effect = side_effect
+        with patch("sys.argv", []):
+            with self.assertRaises(SystemExit):
+                main_helper()
+        self.mock_logger.error.assert_called_with("Terminating. Validation failed.")
+        self.mock_logger.info.assert_called_with("MotionCamera terminated.")
+        self.mock_validate_directory.side_effect = None

@@ -78,7 +78,6 @@ class Configurator:
             return
         new_level = Configurator.convert_to_libcamera_level(desired_level)        
         env_value =  f"RPI:{new_level},Camera:{new_level},RPiSdn:{new_level}"
-        print(f"Setting libcamera logging levels to: {env_value}")
         os.environ[Configurator.LIBCAMERA_LOG_LEVELS] = env_value
 
     @staticmethod

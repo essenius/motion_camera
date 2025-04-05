@@ -90,6 +90,7 @@ class TestMotionCamera(unittest.TestCase):
             self.mock_get_logger.assert_called_once_with(motion_camera.__class__.__name__)
             self.mock_logger.debug.assert_called_with(f"{motion_camera.__class__.__name__} initialized")
             self.mock_logger.warning.assert_not_called()
+            self.mock_motion_handler.terminate = False
 
             # Check if the handlers are initialized correctly
             self.assertIsInstance(motion_camera.camera_handler, self.mock_camera_handler.return_value.__class__)
@@ -97,8 +98,8 @@ class TestMotionCamera(unittest.TestCase):
             self.assertIsInstance(motion_camera.live_feed_handler, self.mock_live_feed_handler.return_value.__class__)
 
             def mock_capture_camera_feed():
-                while not motion_camera.terminate_app:
-                    time.sleep(0.1)  # Simulate some work
+                while not motion_camera.motion_handler.terminate:
+                    time.sleep(1)  # Simulate some work
 
             self.mock_motion_handler.return_value.capture_camera_feed = mock_capture_camera_feed
 
@@ -107,7 +108,6 @@ class TestMotionCamera(unittest.TestCase):
             self.assertFalse(motion_camera.live_feed_handler.terminate)
             self.assertTrue(motion_camera.motion_handler.storage_enabled)
             self.assertFalse(motion_camera.motion_handler.terminate)
-
             self.assertEqual(motion_camera.stop_capture(), "Camera feed stopped")
             self.assertTrue(motion_camera.motion_handler.terminate)
             self.assertTrue(motion_camera.live_feed_handler.terminate)
@@ -163,16 +163,24 @@ class TestMotionCamera(unittest.TestCase):
 
             with MotionCamera(self.mock_options) as motion_camera:
                 response = motion_camera.live_feed()
-                
+
                 mock_response_class.assert_called_once_with(
                     response=generator,
                     mimetype="multipart/x-mixed-replace; boundary=frame"
                 )
+
+             
                 self.assertEqual(response, mock_response_instance)
                 self.mock_live_feed_handler.return_value.generate_feed.assert_called_once()
+
+                # Consume the generator to ensure it is executed
+                self.assertEqual(b'test1', next(generator))
+
                 self.assertFalse(motion_camera.live_feed_handler.terminate)
                 self.assertEqual(motion_camera.end_feed(), "Live feed terminated")
                 self.assertTrue(motion_camera.live_feed_handler.terminate)
+
+                self.assertEqual(response, mock_response_instance)
 
 
 

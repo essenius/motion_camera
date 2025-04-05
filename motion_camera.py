@@ -187,6 +187,7 @@ class MotionCamera:
     def stop_capture(self):
         """Stop capturing the camera feed."""
         self.motion_handler.terminate = True
+
         if self.detect_thread != None:
             self.detect_thread.join()
             self.detect_thread = None
@@ -215,8 +216,8 @@ def main_helper():
             logger.error(f"Terminating. {e}")
             raise
     finally:
-        logger.info(f"{MotionCamera.__name__} terminated")
+        logger.info(f"{MotionCamera.__name__} terminated.")
 
 
 if __name__ == "__main__":
-    main_helper()
+    main_helper() # pragma: no cover
