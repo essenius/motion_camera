@@ -14,10 +14,10 @@ from unittest.mock import MagicMock
 from camera_handler import CameraHandler
 
 class TestCameraHandler(unittest.TestCase):
-
+    """Test the CameraHandler class and its methods."""
 
     def test_camera_handler_happy_path(self):
-
+        """Test the CameraHandler initialization and happy path."""
         mock_cv2 = MagicMock()
         mock_cv2.INTER_NEAREST = 0  # Use the actual value of INTER_NEAREST (typically 0)
         mock_cv2.resize.return_value = "mock_resized_frame"
@@ -63,7 +63,7 @@ class TestCameraHandler(unittest.TestCase):
         mock_camera_instance.close.assert_called_once()
 
     def test_camera_handler_too_large_frame_size(self):
-
+        """Test the CameraHandler initialization with a too large frame size."""
         mock_cv2 = MagicMock()
         mock_camera_class = MagicMock()
         mock_camera_instance = MagicMock()

@@ -25,10 +25,11 @@ sys.modules['werkzeug'] = MagicMock()
 sys.modules['werkzeug.serving'] = MagicMock()
 
 class TestMotionCamera(unittest.TestCase):
+    """Test the MotionCamera class and its methods."""
 
     @classmethod
     def setUpClass(cls):
-        # Mock flask, PiCamera2, and cv2 globally
+        """Set up the test environment by mocking necessary components."""
         cls.mock_flask = sys.modules['flask']
         cls.mock_picamera2 = sys.modules['picamera2']
         cls.mock_cv2 = sys.modules['cv2']
@@ -37,7 +38,7 @@ class TestMotionCamera(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        # Remove the mocks from sys.modules after tests
+        """Clean up the test environment by removing mocks from sys.modules."""
         del sys.modules['flask']
         del sys.modules['picamera2']
         del sys.modules['cv2']
@@ -46,6 +47,7 @@ class TestMotionCamera(unittest.TestCase):
 
 
     def setUp(self):
+        """Set up the test environment by patching necessary components."""
         # we need to patch the logger here as it is instantiated in the __init__ method
         # We can't use the @patch decorator in the setup method
         self.patcher_logger = patch("motion_camera.logging.getLogger")
@@ -77,6 +79,7 @@ class TestMotionCamera(unittest.TestCase):
         self.mock_options.no_auto_start = False
 
     def tearDown(self):
+        """Stop all patchers to clean up the test environment."""
         self.patcher_logger.stop()
         self.patcher_camera_handler.stop()
         self.patcher_video_recorder.stop()
@@ -84,6 +87,9 @@ class TestMotionCamera(unittest.TestCase):
         self.patcher_live_feed_handler.stop()
 
     def test_motion_camera_happy_path(self):
+        """Test the happy path of the MotionCamera class.
+        This test checks if the MotionCamera class is initialized correctly and if the methods work as expected.
+        """
         # the with command triggers __enter__ and __exit__ methods
         with MotionCamera(self.mock_options) as motion_camera:
             # Check if the logger is initialized correctly
@@ -134,6 +140,7 @@ class TestMotionCamera(unittest.TestCase):
         self.mock_logger.info.assert_called_with("Exited MotionCamera")
 
     def test_motion_camera_signal_handling(self):
+        """Test if the MotionCamera class handles signals correctly."""
         with MotionCamera(self.mock_options) as motion_camera:
             # Ensure terminate is initially False
             self.assertFalse(motion_camera.terminate)
@@ -151,6 +158,7 @@ class TestMotionCamera(unittest.TestCase):
             self.mock_logger.warning.assert_called_with("Initialization interrupted by SIGINT/SIGTERM signal")
 
     def test_motion_camera_live_feed(self):
+        """Test if the live feed function of the MotionCamera class works correctly."""
         def mock_generate_feed():
             yield b"test1"
 

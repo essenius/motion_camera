@@ -15,7 +15,10 @@ import argparse
 import os
 
 class ValidateNumber:
+    """Class to validate numerical values for command line arguments (used in ArgumentParser)."""
+
     def __init__(self, min_value=None, max_value=None, type=int):
+        """Initialize the ValidateNumber class with min and max values."""
         self.min_value = min_value
         self.max_value = max_value
         self.type = type
@@ -47,6 +50,7 @@ class ValidateNumber:
             raise argparse.ArgumentTypeError(message)
     
     def __call__(self, value):
+        """Convert and validate the value."""
         try:
             value = self.type(value)
         except (ValueError, TypeError):
@@ -56,7 +60,8 @@ class ValidateNumber:
 
         
 class Configurator:
-    """Class to handle the configuration of the application."""
+    """Static class to handle the configuration of the application."""
+
     LIBCAMERA_LOG_LEVELS = "LIBCAMERA_LOG_LEVELS"
     @staticmethod
     def convert_to_libcamera_level(level):
@@ -100,6 +105,7 @@ class Configurator:
 
     @staticmethod
     def validate_frame_size(value):
+        """Validate the frame size to ensure it is in the format 'width x height'."""
         try:
             width, height = map(int, value.split("x"))
             if width <= 0 or height <= 0:

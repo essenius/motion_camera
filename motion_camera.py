@@ -197,7 +197,7 @@ class MotionCamera:
 
 def main_helper():
     """Main helper function to run the application."""
-    # We don't have a logger yet, but can get validation errors.
+    # We don't have a logger yet, but we can get validation errors.
     # If a SystemExit is raised here, the program will terminate with a message.
     options, unknown_options = Configurator.get_parser_options()
     Configurator.set_logging(options)
@@ -218,6 +218,6 @@ def main_helper():
     finally:
         logger.info(f"{MotionCamera.__name__} terminated.")
 
-
+# Keep the main block as small as possible since that's hard to unit test
 if __name__ == "__main__":
     main_helper() # pragma: no cover

@@ -16,9 +16,10 @@ import numpy
 import time
 
 class TestMotionHandler(unittest.TestCase):
+    """Test the MotionHandler class and its methods."""
 
     def setUp(self):
-        # Common mocks
+        """Set up the test environment by patching necessary components."""
         self.mock_camera_handler = MagicMock()
         self.mock_camera_handler.capture_frame.return_value = numpy.array([[0, 1], [2, 3]])  
 
@@ -30,13 +31,11 @@ class TestMotionHandler(unittest.TestCase):
         self.mock_cv2.putText.return_value = None
         self.mock_cv2.COLOR_RGB2GRAY = 42
 
-        # Mock options
         self.mock_options = MagicMock()
         self.mock_options.mse_threshold = 12
         self.mock_options.motion_interval = 10
         self.mock_options.frame_size = (800, 600)
 
-        # Create MotionHandler instance
         self.motion_handler = MotionHandler(
             self.mock_camera_handler,
             self.mock_video_recorder,
@@ -45,6 +44,7 @@ class TestMotionHandler(unittest.TestCase):
         )
 
     def test_motion_handler_init(self):
+        """Test the initialization of MotionHandler"""
         self.assertEqual(self.motion_handler.mse_motion_threshold, 12)
         self.assertEqual(self.motion_handler.motion_interval, 10)
         self.assertEqual(self.motion_handler.camera_handler, self.mock_camera_handler)
@@ -57,6 +57,7 @@ class TestMotionHandler(unittest.TestCase):
         self.assertIsNone(self.motion_handler.last_motion_time, "last_motion_time should be None by default")
 
     def test_motion_handler_mean_squared_error(self):
+        """Test the mean_squared_error method"""
         frame1 = numpy.array([[0, 0], [0, 0]])
         frame2 = numpy.array([[10, 10], [10, 10]])
         
@@ -66,6 +67,7 @@ class TestMotionHandler(unittest.TestCase):
 
     @patch("motion_handler.Thread")
     def test_motion_handler_handle_frame(self, mock_thread_class):
+        """Test if the handle_frame method works correctly"""
         mock_thread_instance = MagicMock()
         mock_thread_class.return_value = mock_thread_instance
 
@@ -95,7 +97,7 @@ class TestMotionHandler(unittest.TestCase):
         mock_thread_instance.start.assert_called_once()
         
     def test_motion_handler_store_video(self):
-
+        """Test the store_video method"""
         # The first call to is_segment_duration_exceeded should return False, so we start recording.
         # The second should stop it. With the third and fourth, we test the other conditions in recording_should_stop
         self.mock_video_recorder.is_segment_duration_exceeded.side_effect = [False, True, False, False]
@@ -123,6 +125,7 @@ class TestMotionHandler(unittest.TestCase):
 
     @patch("motion_handler.Synchronizer.wait_for_next_sampling")
     def test_motion_handler_capture_camera_feed(self, mock_wait_for_next_sampling):
+        """Test the capture_camera_feed method"""
 
         # make the first call to wait_for_next_sampling set the terminate flag, so we exit the loop
         def side_effect(*args, **kwargs):

@@ -20,8 +20,22 @@ import argparse
 import os
 
 class TestConfigurator(unittest.TestCase):
-    def test_configurator_get_parser_options_defaults(self):
+    """Test the Configurator class and its methods."""
+    
+    @patch("configparser.ConfigParser")
+    def test_configurator_get_parser_options_defaults(self, mock_config_parser):
+        """Test the default values of the configurator's parser options.
+        This test checks that the default values are set correctly when no command-line arguments are provided."""
         test_args = ["motion_camera.py"]
+
+        # Mock the configparser to return default values (so it doesn't try to read the config file)
+        mock_config_instance = MagicMock()
+        mock_config_instance.get.side_effect = lambda section, option, fallback=None: fallback
+        mock_config_instance.getint.side_effect = lambda section, option, fallback=None: fallback
+        mock_config_instance.getboolean.side_effect = lambda section, option, fallback=None: fallback
+        mock_config_instance.getfloat.side_effect = lambda section, option, fallback=None: fallback
+        mock_config_parser.return_value = mock_config_instance
+
         with patch("sys.argv", test_args):
             options, unknown_options = Configurator.get_parser_options()
             self.assertEqual(options.directory, "/media/cam")
@@ -37,6 +51,7 @@ class TestConfigurator(unittest.TestCase):
             self.assertEqual(unknown_options, [])
 
     def test_configurator_get_parser_options_with_args(self):
+        """Test the configurator's parser options with command-line arguments."""
         test_args = [
             "motion_camera.py",
             "--directory", "/tmp/cam",
@@ -67,6 +82,7 @@ class TestConfigurator(unittest.TestCase):
             self.assertEqual(unknown_options, ["--extra-option", "value"])
 
     def test_configurator_get_parser_options_invalid_size(self):
+        """Test the configurator's parser options with invalid frame size."""
         test_args = [
             "motion_camera.py",
             "--frame-size", "invalid_size"
@@ -87,6 +103,7 @@ class TestConfigurator(unittest.TestCase):
 
 
     def test_configurator_get_parser_options_with_config_file(self):
+        """Test the configurator's parser options with a configuration file."""
         mock_config = """
         [DEFAULT]
         config = bogus.conf
@@ -122,6 +139,7 @@ class TestConfigurator(unittest.TestCase):
                 self.assertEqual(unknown_options, [])
 
     def test_configurator_get_parser_options_mutual_exclusive(self):
+        """Test the configurator's parser options with mutually exclusive arguments."""
         # Patch the open() function to return the mock configuration
         with patch("sys.argv", ["motion_camera.py", "--verbose", "--no-verbose" ]):
             with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
@@ -132,6 +150,7 @@ class TestConfigurator(unittest.TestCase):
                 self.assertIn("not allowed with argument", error_message)
 
     def test_configurator_get_parser_options_too_low_value(self):
+        """Test the configurator's parser options with a too low value for a range."""
         # Patch the open() function to return the mock configuration
         with patch("sys.argv", ["motion_camera.py", "--motion-interval", "0" ]):
             with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
@@ -142,6 +161,7 @@ class TestConfigurator(unittest.TestCase):
                 self.assertIn("Expected type int not less than 1 but got 0", error_message)
 
     def test_configurator_get_parser_options_too_high_value(self):
+        """Test the configurator's parser options with a too high value for a range."""
         # Patch the open() function to return the mock configuration
         with patch("sys.argv", ["motion_camera.py", "--mse-threshold", "100000" ]):
             with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
@@ -152,6 +172,7 @@ class TestConfigurator(unittest.TestCase):
                 self.assertIn("Expected type float between 1 and 65025 but got 100000", error_message)
 
     def test_configurator_get_parser_options_invalid_value(self):
+        """Test the configurator's parser options with an invalid numeric value."""
         # Patch the open() function to return the mock configuration
         with patch("sys.argv", ["motion_camera.py", "--mse-threshold", "q" ]):
             with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
@@ -163,6 +184,7 @@ class TestConfigurator(unittest.TestCase):
 
     @patch.dict("os.environ", {}, clear=True)
     def test_configurator_set_logging(self):
+        """Test the configurator's logging setup."""
         with patch("logging.basicConfig") as mock_basic_config:
             options = SimpleNamespace(log="DEBUG", verbose=False)
             Configurator.set_logging(options)
@@ -195,9 +217,7 @@ class TestConfigurator(unittest.TestCase):
                 Configurator.set_logging(options)
             self.assertGreaterEqual(str(context.exception).find("Unrecognized log level 'BOGUS' -- must be one of: critical | error | warning | info | debug"), 0)
             self.assertIsNone(os.environ.get(Configurator.LIBCAMERA_LOG_LEVELS))
-            
-
-
+ 
     def patch_os_functions(self, scenario=""):
         """Helper method to patch os functions."""
 
@@ -227,7 +247,7 @@ class TestConfigurator(unittest.TestCase):
         return stack
 
     def test_configurator_validate_directory_ok(self):
-        # Test valid directory
+        """Test the configurator's validate_directory method with a valid directory."""
         full_dir = "/mock/valid/directory"
         stack = self.patch_os_functions()
         with stack:
@@ -240,6 +260,7 @@ class TestConfigurator(unittest.TestCase):
             stack.mocks["statvfs"].assert_called_once_with(full_dir)
 
     def validate_directory_test_helper(self, scenario, expectations):
+        """Helper method to test the configurator's validate_directory method with different scenarios."""
         stack = self.patch_os_functions(scenario=scenario)
         with stack:
             with self.assertRaises(SystemExit) as context:
@@ -252,6 +273,7 @@ class TestConfigurator(unittest.TestCase):
                     self.assertEqual(mock.call_count, call_count)
 
     def test_configurator_validate_directory_non_existing(self):
+        """Test the configurator's validate_directory method with a non-existing directory."""
         self.validate_directory_test_helper(
             scenario="non_existing & not_a_directory & no_access & no_space",
             expectations={
@@ -261,6 +283,7 @@ class TestConfigurator(unittest.TestCase):
         )
 
     def test_configurator_validate_directory_not_a_directory(self):
+        """Test the configurator's validate_directory method with a path that is not a directory."""
         self.validate_directory_test_helper(
             scenario = "not_a_directory & no_access",
             expectations = {
@@ -270,6 +293,7 @@ class TestConfigurator(unittest.TestCase):
         )
 
     def test_configurator_validate_directory_no_access(self):
+        """Test the configurator's validate_directory method with a directory that is not writable."""
         self.validate_directory_test_helper(
             scenario="no_access & no_space",
             expectations={
@@ -279,6 +303,7 @@ class TestConfigurator(unittest.TestCase):
         )
 
     def test_configurator_validate_directory_no_space(self):
+        """Test the configurator's validate_directory method with a directory that has no space."""
         self.validate_directory_test_helper(
             scenario="no_space",
             expectations={
@@ -288,6 +313,7 @@ class TestConfigurator(unittest.TestCase):
         )
 
     def test_validate_number_class(self):
+        """Test the ValidateNumber class."""
 
         greater_only = ValidateNumber(max_value=100)
         self.assertIsNone(greater_only.min_value)

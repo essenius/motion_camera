@@ -16,7 +16,7 @@ import logging
 # and we want to avoid that, for example, if the user only asks for help. 
 
 class Synchronizer:
-    """Class to handle sampling intervals (including overrun recovery)."""
+    """Static Class to handle sampling intervals (including overrun recovery)."""
     sampling_rate = 15.0                  # a.k.a. frames per second
     sampling_interval = 1 / sampling_rate # interval between samples in seconds
 

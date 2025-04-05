@@ -66,6 +66,7 @@ class MotionHandler:
         self.logger.info("Camera capture terminated.")
 
     def handle_frame(self):
+        """Handle the camera frame and check for motion."""
         FRAME_SKIPS = 5
         frame = self.camera_handler.capture_frame()
         # we handle the motion in the next loop after detecting to keep the loops fast enough. One frame difference shouldn't matter
@@ -101,7 +102,7 @@ class MotionHandler:
         if not self.motion_detected:
             return
         self.display_motion_alert()
-        self.logger.debug("Motion detected")
+        self.logger.info("Motion detected")
         self.last_motion_time = time.time()
         if self.storage_enabled and not self.video_recorder.recording_active:
             self.logger.debug("Starting video storage.")

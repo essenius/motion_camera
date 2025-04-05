@@ -15,6 +15,7 @@ from video_recorder import VideoRecorder
 from synchronizer import Synchronizer
 from datetime import datetime
 class TestVideoRecorder(unittest.TestCase):
+    """Test the VideoRecorder class and its methods."""
 
     def setUp(self):
         # Mock cv2 and VideoWriter
@@ -42,6 +43,7 @@ class TestVideoRecorder(unittest.TestCase):
 
 
     def test_video_recorder_cannot_open_file(self):
+        """Test the behavior when the video file cannot be opened."""
         self.assertFalse(self.recorder.recording_active, "recording not active after initialization")
 
         # Test the initialization of the video writer
@@ -59,6 +61,7 @@ class TestVideoRecorder(unittest.TestCase):
         self.assertFalse(self.recorder.recording_active, "recording not active after start_recording when file cannot be opened")
 
     def test_video_recorder_happy_path(self):
+        """Test the happy path of the video recorder."""
 
         Synchronizer.set_rate(25) 
         start_time_timestamp = 0

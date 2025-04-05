@@ -15,8 +15,10 @@ from live_feed_handler import LiveFeedHandler
 import time
 
 class TestLiveFeedHandler(unittest.TestCase):
+    """Test the LiveFeedHandler class and its methods."""
 
     def setUp(self):
+        """Mock the logger the CameraHandler."""
         # we need to patch the logger here as it is instantiated in the __init__ method
         # We can't use the @patch decorator in the setup method
         self.patcher_logger = patch("live_feed_handler.logging.getLogger")
@@ -31,11 +33,12 @@ class TestLiveFeedHandler(unittest.TestCase):
         self.live_feed_handler = LiveFeedHandler(self.mock_camera_handler, self.mock_cv2)
 
     def tearDown(self):
+        """Stop all patchers to clean up the test environment."""
         self.patcher_logger.stop()
 
     @patch("live_feed_handler.Synchronizer.wait_for_next_sampling")
     def test_live_feed_handler_happy_path(self, mock_wait_for_next_sampling):
-
+        """Test the happy path of the live feed handler."""
         # make the first call to wait_for_next_sampling set the terminate flag, so we exit the loop
         def side_effect(*args, **kwargs):            
             self.live_feed_handler.terminate = True
@@ -60,6 +63,7 @@ class TestLiveFeedHandler(unittest.TestCase):
             next(feed_generator)
 
     def test_live_feed_handler_unhappy_path(self):
+        """Test the unhappy path of the live feed handler (i.e. an exception occurs)."""
         # Simulate an exception in the live feed
         self.live_feed_handler.cv2.imencode.side_effect = Exception("Test exception")
 

@@ -14,8 +14,11 @@ from unittest.mock import patch, MagicMock
 from motion_camera import main_helper
 
 class TestMain(unittest.TestCase):
+    """Test the main_helper function in motion_camera.py."""
 
     def setUp(self):
+        """Set up the test environment by patching necessary components.
+        This includes the MotionCamera class, logging setup, and command-line arguments."""
         # Create patchers for all the mocks
         self.motion_camera_patcher = patch("motion_camera.MotionCamera")
         self.set_logging_patcher = patch("motion_camera.Configurator.set_logging")
@@ -50,7 +53,7 @@ class TestMain(unittest.TestCase):
         self.mock_get_logger.return_value = self.mock_logger
 
     def tearDown(self):
-        # Stop all patchers
+        """Stop all patchers to clean up the test environment."""
         self.motion_camera_patcher.stop()
         self.set_logging_patcher.stop()
         self.validate_directory_patcher.stop()
@@ -60,7 +63,7 @@ class TestMain(unittest.TestCase):
 
 
     def test_motion_camera_main_helper_happy_path(self):
-
+        """Test the happy path of the main_helper function."""
         with patch("sys.argv", ["motion_camera.py", "--port", "5000", "--directory", "/home/user/videos", "-l", "info"]):
             main_helper()
 
@@ -72,6 +75,7 @@ class TestMain(unittest.TestCase):
         self.mock_app.run.assert_called_once()
 
     def test_motion_camera_main_helper_systemexit_message(self):
+        """Test raising a SystemExit with message in the main_helper function."""
         def side_effect(*args, **kwargs):
             raise SystemExit("Validation failed.")
         

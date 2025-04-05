@@ -1,15 +1,14 @@
 # Motion camera
 
-App to control a Pi camera on a Raspberry Pi. I've tested it on a Pi Zero 2 W with a Pi Camera 1.3.
+App to control a Pi camera on a Raspberry Pi. It was tested on a Pi Zero 2 W with a Pi Camera 1.3.
 
-After starting up it will get into a mode that starts recording when motion is detected, and stops if there are 10 seconds without motion, or after 5 minutes (whichever comes first).
-It is set to 15 frames per second as I've found empirically that this is the max that the Pi Zero can handle.
+After starting up it will get into a mode that starts recording when motion is detected, and stops if there are 10 seconds without motion, or after 5 minutes (whichever comes first). It is set to 15 frames per second as I've found empirically that this is the maximum that the Pi Zero 2 can handle.
 
 - The live feed is avaible at `http://name_of_pi:5000/feed`.
 - You can start/stop capturing by `http://name_of_pi:5000/start` and `http://name_of_pi:5000/stop`.
 - You can start/stop saving to file by `http://name_of_pi:5000/save` and `http://name_of_pi:5000/nosave`.
 
-I'm saving my videos directly to a samba share so I don't need to use the Pi's SD card.
+I'm saving my videos directly to a samba share so I don't need to use the Pi's SD card, but the application doesn't force you to.
 
 ## Structure
 
@@ -17,8 +16,9 @@ The application uses Flask as the web server and consists of several classes:
 
 ### Configurator
 Grabbing the command line parameters and/or configuration file, setting up logging
-Start the app with `motion_camera.py --log=info` for the 'info' level. You can also use `debug`, `warning`, `error` or `critical`. Default is WARNING. 
-To prevent too much noise during debugging, logging level of dependencies (picamera2, cv2, flask and werkzeug) is put to INFO when choosing DEBUG.
+Start the app with `motion_camera.py --log=info` for the 'info' level. You can also use `debug`, `warning`, `error` or `critical`. Default is `warning`. 
+To prevent too much noise during debugging, logging level of dependencies (picamera2, cv2, flask and werkzeug) is put to `info` when choosing `debug`.
+The `libcamera` log level follows this dependency level, unless the setting `LIBCAMERA_LOG_LEVELS` was set.
 
 Run `motion_camera.py -h` to get help about command line parameters. All options except `config` are also available in config files.
 

@@ -14,7 +14,10 @@ import time as Time
 from synchronizer import Synchronizer
 
 class TestSynchronizer(unittest.TestCase):
-    def test_synchronizer_initialization(self):
+    """Test the Synchronizer class and its methods."""
+    
+    def test_synchronizer_wait_for_next_sampling(self):
+        """Test the Synchronizer's wait_for_next_sampling method."""
         DELTA = 0.002
         Synchronizer.set_rate(100)
         interval = Synchronizer.sampling_interval
