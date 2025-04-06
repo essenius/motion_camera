@@ -29,6 +29,8 @@ from live_feed_handler import LiveFeedHandler
 class MotionCamera:
     """Class to handle the motion camera application."""
 
+    PLAIN_TEXT = "plain/text"
+
     response_template = """
     <html>
         <head>
@@ -118,22 +120,24 @@ class MotionCamera:
         self.stop_capture()
         self.logger.info(f"Exited {self.__class__.__name__}")
 
-    def html_response(self, message):
-        """Return an HTML response."""
+    def response(self, message, mimetype="text/html"):
+        """Return an HTML or text response (based on mimetype)."""
+        if (mimetype == self.PLAIN_TEXT):
+            return message
         with self.app.app_context():
-            url = self.app.url_for('index')
-            return self.flask.Response(response=MotionCamera.response_template.format(url=url, message=message), mimetype="text/html")
+            url = self.app.url_for("index")
+            return self.flask.Response(response=MotionCamera.response_template.format(url=url, message=message), mimetype=mimetype)
     
 
     def disable_video_storage(self):
         """Disable video storage."""
         self.motion_handler.storage_enabled = False
-        return self.html_response("Video storage disabled")
+        return self.response("Video storage disabled")
 
-    def enable_video_storage(self):
-        """Enable video storage."""
+    def enable_video_storage(self, mimetype="text/html"):
+        """Enable video storage. Called from within run as well as flask, so we enable plain text response too."""
         self.motion_handler.storage_enabled = True
-        return self.html_response("Video storage enabled")
+        return self.response("Video storage enabled", mimetype=mimetype)
 
     def index(self):
         """Return the index page."""
@@ -141,7 +145,7 @@ class MotionCamera:
         live_feed_status = "running" if not self.live_feed_handler.terminate else "stopped"
         storage_status = "enabled" if self.motion_handler.storage_enabled else "disabled"
 
-        return (
+        return self.response(
             f"<p>The system is {capture_status}, live feed is {live_feed_status} and storage is {storage_status}. <br />"
             "<br />"
             "Your choices: </p>"
@@ -163,7 +167,7 @@ class MotionCamera:
     def end_feed(self):
         """Return the live camera feed."""
         self.live_feed_handler.terminate = True
-        return self.html_response("Live feed terminated")
+        return self.response("Live feed terminated")
 
     def run(self):
         """Run the MotionCameraApp."""
@@ -173,7 +177,7 @@ class MotionCamera:
 
         # do this before starting the server, so the camera can settle in
         if not self.options.no_auto_start:
-            message = self.start_capture()
+            message = self.start_capture(mimetype=self.PLAIN_TEXT)
             self.logger.info(message)
 
         self.logger.info(f"Starting Flask server on port {self.options.port}{' (debug mode)' if self.options.verbose else ''}")
@@ -182,7 +186,7 @@ class MotionCamera:
 
         # do this after creating the server, so we don't record the startup time while the camera settles in
         if not self.options.no_auto_start:
-            message = self.enable_video_storage()
+            message = self.enable_video_storage(self.PLAIN_TEXT)
             self.logger.info(message)
 
         try:
@@ -196,13 +200,13 @@ class MotionCamera:
         self.terminate = True
         raise SystemExit
 
-    def start_capture(self):
-        """Start capturing the camera feed."""
+    def start_capture(self, mimetype="text/html"):
+        """Start capturing the camera feed (also called by run())."""
         self.motion_handler.terminate = False
         self.detect_thread = Thread(target=self.motion_handler.capture_camera_feed)
         self.detect_thread.daemon = True
         self.detect_thread.start()
-        return self.html_response("Camera feed started")
+        return self.response("Camera feed started", mimetype=mimetype)
 
     def stop_capture(self):
         """Stop capturing the camera feed."""
@@ -212,7 +216,7 @@ class MotionCamera:
             self.detect_thread.join()
             self.detect_thread = None
         self.live_feed_handler.terminate = True
-        return self.html_response("Camera feed stopped")
+        return self.response("Camera feed stopped")
 
 
 def main_helper():

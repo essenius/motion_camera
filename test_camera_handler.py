@@ -83,6 +83,15 @@ class TestCameraHandler(unittest.TestCase):
         mock_options = MagicMock()
         mock_options.frame_size = (8000, 6000)
 
-        with self.assertRaisesRegex(SystemExit, "Requested frame size \(8000, 6000\) is larger than the maximum supported size \(1920, 1080\)."):
+        with self.assertRaisesRegex(SystemExit, r"Requested frame size \(8000, 6000\) is larger than the maximum supported size \(1920, 1080\)."):
             _ = CameraHandler(mock_camera_class, mock_options, mock_cv2)
 
+    def test_camera_handler_too_large_failing_camera(self):
+        """Test the CameraHandler initialization with a too large frame size."""
+        mock_cv2 = MagicMock()
+        mock_camera_class = MagicMock()
+        mock_camera_class.side_effect = Exception("Camera busy")
+        mock_options = MagicMock()
+
+        with self.assertRaisesRegex(SystemExit, "Camera initialization failed: Camera busy"):
+            _ = CameraHandler(mock_camera_class, mock_options, mock_cv2)

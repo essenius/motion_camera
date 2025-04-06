@@ -127,7 +127,9 @@ class TestMotionCamera(unittest.TestCase):
             motion_camera.log_server_ready()
             self.mock_logger.info.assert_called_with("Flask server is ready to receive requests.")
 
-            response = motion_camera.index()
+            _ = motion_camera.index()
+            response = motion_camera.flask.Response.call_args.kwargs["response"]
+            
             self.assertIn("The system is idle", response)
             self.assertIn("live feed is stopped", response)
             self.assertIn("storage is disabled", response)
