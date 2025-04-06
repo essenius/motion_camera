@@ -30,6 +30,7 @@ class MotionCamera:
     """Class to handle the motion camera application."""
 
     PLAIN_TEXT = "plain/text"
+    TEXT_HTML = "text/html"
 
     response_template = """
     <html>
@@ -116,11 +117,12 @@ class MotionCamera:
     def __exit__(self, exc_type, exc_value, traceback):
         """Exit the MotionCameraApp."""
         self.logger.debug(f"Exiting {self.__class__.__name__}")
-        self.disable_video_storage()
-        self.stop_capture()
-        self.logger.info(f"Exited {self.__class__.__name__}")
+        message = self.disable_video_storage(self.PLAIN_TEXT)
+        self.logger.info(message)
+        message = self.stop_capture(self.PLAIN_TEXT)
+        self.logger.info(message)
 
-    def response(self, message, mimetype="text/html"):
+    def response(self, message, mimetype=TEXT_HTML):
         """Return an HTML or text response (based on mimetype)."""
         if (mimetype == self.PLAIN_TEXT):
             return message
@@ -129,13 +131,13 @@ class MotionCamera:
             return self.flask.Response(response=MotionCamera.response_template.format(url=url, message=message), mimetype=mimetype)
     
 
-    def disable_video_storage(self):
+    def disable_video_storage(self, mimetype=TEXT_HTML):
         """Disable video storage."""
         self.motion_handler.storage_enabled = False
-        return self.response("Video storage disabled")
+        return self.response("Video storage disabled", mimetype=mimetype)
 
-    def enable_video_storage(self, mimetype="text/html"):
-        """Enable video storage. Called from within run as well as flask, so we enable plain text response too."""
+    def enable_video_storage(self, mimetype=TEXT_HTML):
+        """Enable video storage."""
         self.motion_handler.storage_enabled = True
         return self.response("Video storage enabled", mimetype=mimetype)
 
@@ -145,7 +147,7 @@ class MotionCamera:
         live_feed_status = "running" if not self.live_feed_handler.terminate else "stopped"
         storage_status = "enabled" if self.motion_handler.storage_enabled else "disabled"
 
-        return self.response(
+        return self.flask.Response(response=
             f"<p>The system is {capture_status}, live feed is {live_feed_status} and storage is {storage_status}. <br />"
             "<br />"
             "Your choices: </p>"
@@ -156,7 +158,8 @@ class MotionCamera:
             "<li><a href='/stop'>Stop capturing video</a></li>"
             "<li><a href='/save'>Enable video storage</a></li>"
             "<li><a href='/nosave'>Disable video storage</a></li>"
-            "</ul>"
+            "</ul>", 
+            mimetype=self.TEXT_HTML
         )
 
     def live_feed(self):
@@ -208,7 +211,7 @@ class MotionCamera:
         self.detect_thread.start()
         return self.response("Camera feed started", mimetype=mimetype)
 
-    def stop_capture(self):
+    def stop_capture(self, mimetype=TEXT_HTML):
         """Stop capturing the camera feed."""
         self.motion_handler.terminate = True
 
@@ -216,7 +219,7 @@ class MotionCamera:
             self.detect_thread.join()
             self.detect_thread = None
         self.live_feed_handler.terminate = True
-        return self.response("Camera feed stopped")
+        return self.response("Camera feed stopped", mimetype=mimetype)
 
 
 def main_helper():

@@ -129,7 +129,7 @@ class TestMotionCamera(unittest.TestCase):
 
             _ = motion_camera.index()
             response = motion_camera.flask.Response.call_args.kwargs["response"]
-            
+
             self.assertIn("The system is idle", response)
             self.assertIn("live feed is stopped", response)
             self.assertIn("storage is disabled", response)
@@ -142,7 +142,7 @@ class TestMotionCamera(unittest.TestCase):
 
 
         self.mock_logger.debug.assert_called_with("Exiting MotionCamera")
-        self.mock_logger.info.assert_called_with("Exited MotionCamera")
+        self.mock_logger.info.assert_called_with("Camera feed stopped")
 
     def test_motion_camera_signal_handling(self):
         """Test if the MotionCamera class handles signals correctly."""
