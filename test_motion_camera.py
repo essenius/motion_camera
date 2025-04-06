@@ -114,11 +114,14 @@ class TestMotionCamera(unittest.TestCase):
             self.assertFalse(motion_camera.live_feed_handler.terminate)
             self.assertTrue(motion_camera.motion_handler.storage_enabled)
             self.assertFalse(motion_camera.motion_handler.terminate)
-            self.assertEqual(motion_camera.stop_capture(), "Camera feed stopped")
+            _ = motion_camera.stop_capture()
+            response = motion_camera.flask.Response.call_args.kwargs["response"]
+            self.assertIn("Camera feed stopped", response)
             self.assertTrue(motion_camera.motion_handler.terminate)
             self.assertTrue(motion_camera.live_feed_handler.terminate)
-
-            self.assertEqual(motion_camera.disable_video_storage(), "Video storage disabled")
+            _ = motion_camera.disable_video_storage()
+            response = motion_camera.flask.Response.call_args.kwargs["response"]
+            self.assertIn("Video storage disabled", response)
             self.assertFalse(motion_camera.motion_handler.storage_enabled)
 
             motion_camera.log_server_ready()
@@ -128,7 +131,7 @@ class TestMotionCamera(unittest.TestCase):
             self.assertIn("The system is idle", response)
             self.assertIn("live feed is stopped", response)
             self.assertIn("storage is disabled", response)
-            self.assertIn("<li><a href='/feed'>Show live Feed</a></li>", response)
+            self.assertIn("<li><a href='/feed'>Show live feed</a></li>", response)
             self.assertIn("<li><a href='/endfeed'>Stop live feed</a></li>", response)
             self.assertIn("<li><a href='/start'>Start capturing video</a></li>", response)
             self.assertIn("<li><a href='/stop'>Stop capturing video</a></li>", response)
@@ -176,7 +179,6 @@ class TestMotionCamera(unittest.TestCase):
                     response=generator,
                     mimetype="multipart/x-mixed-replace; boundary=frame"
                 )
-
              
                 self.assertEqual(response, mock_response_instance)
                 self.mock_live_feed_handler.return_value.generate_feed.assert_called_once()
@@ -185,10 +187,10 @@ class TestMotionCamera(unittest.TestCase):
                 self.assertEqual(b'test1', next(generator))
 
                 self.assertFalse(motion_camera.live_feed_handler.terminate)
-                self.assertEqual(motion_camera.end_feed(), "Live feed terminated")
+                _ = motion_camera.end_feed()
+                response_args = motion_camera.flask.Response.call_args.kwargs["response"]
+                self.assertIn("Live feed terminated", response_args)
                 self.assertTrue(motion_camera.live_feed_handler.terminate)
-
-                self.assertEqual(response, mock_response_instance)
 
 
 

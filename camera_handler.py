@@ -21,8 +21,13 @@ class CameraHandler:
         """Initialize the camera handler with the camera object and capture configuration."""
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.debug(f"Initializing {self.__class__.__name__}")
+        self.camera = None
 
-        self.camera = camera_class()
+        try:
+            self.camera = camera_class()
+        except Exception as e:
+            raise SystemExit(f"Camera initialization failed: {e}")
+        
         self.logger.debug("Created camera variable")
         self.cv2 = cv2
         self.frame_size = options.frame_size

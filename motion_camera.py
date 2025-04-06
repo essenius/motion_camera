@@ -29,6 +29,19 @@ from live_feed_handler import LiveFeedHandler
 class MotionCamera:
     """Class to handle the motion camera application."""
 
+    response_template = """
+    <html>
+        <head>
+            <meta http-equiv="refresh" content="3;url={url}">
+        </head>
+        <body>
+            <p>{message}</p>
+            <p>Redirecting in 3 seconds...</p>
+            <p>If the page does not refresh, <a href="{url}">go back</a>.</p>
+        </body>
+    </html>
+    """
+
     def log_server_ready(self):
         """Log when the server is ready to handle requests."""
         self.logger.info("Flask server is ready to receive requests.")
@@ -105,15 +118,22 @@ class MotionCamera:
         self.stop_capture()
         self.logger.info(f"Exited {self.__class__.__name__}")
 
+    def html_response(self, message):
+        """Return an HTML response."""
+        with self.app.app_context():
+            url = self.app.url_for('index')
+            return self.flask.Response(response=MotionCamera.response_template.format(url=url, message=message), mimetype="text/html")
+    
+
     def disable_video_storage(self):
         """Disable video storage."""
         self.motion_handler.storage_enabled = False
-        return "Video storage disabled"
+        return self.html_response("Video storage disabled")
 
     def enable_video_storage(self):
         """Enable video storage."""
         self.motion_handler.storage_enabled = True
-        return "Video storage enabled"
+        return self.html_response("Video storage enabled")
 
     def index(self):
         """Return the index page."""
@@ -126,7 +146,7 @@ class MotionCamera:
             "<br />"
             "Your choices: </p>"
             "<ul>"
-            "<li><a href='/feed'>Show live Feed</a></li>" 
+            "<li><a href='/feed'>Show live feed</a></li>" 
             "<li><a href='/endfeed'>Stop live feed</a></li>"
             "<li><a href='/start'>Start capturing video</a></li>"
             "<li><a href='/stop'>Stop capturing video</a></li>"
@@ -143,7 +163,7 @@ class MotionCamera:
     def end_feed(self):
         """Return the live camera feed."""
         self.live_feed_handler.terminate = True
-        return "Live feed terminated"
+        return self.html_response("Live feed terminated")
 
     def run(self):
         """Run the MotionCameraApp."""
@@ -157,7 +177,7 @@ class MotionCamera:
             self.logger.info(message)
 
         self.logger.info(f"Starting Flask server on port {self.options.port}{' (debug mode)' if self.options.verbose else ''}")
-        server = make_server("0.0.0.0", self.options.port, self.app)
+        server = make_server("0.0.0.0", self.options.port, self.app, threaded=True)
         self.logger.info("Flask server is ready to receive requests.")
 
         # do this after creating the server, so we don't record the startup time while the camera settles in
@@ -182,7 +202,7 @@ class MotionCamera:
         self.detect_thread = Thread(target=self.motion_handler.capture_camera_feed)
         self.detect_thread.daemon = True
         self.detect_thread.start()
-        return "Camera feed started"
+        return self.html_response("Camera feed started")
 
     def stop_capture(self):
         """Stop capturing the camera feed."""
@@ -192,7 +212,7 @@ class MotionCamera:
             self.detect_thread.join()
             self.detect_thread = None
         self.live_feed_handler.terminate = True
-        return "Camera feed stopped"
+        return self.html_response("Camera feed stopped")
 
 
 def main_helper():
